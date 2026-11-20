@@ -73,7 +73,9 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 - Node / npm 可用；Vite 8、React 19、TypeScript 7、Three 0.187、R3F 9、Vitest 5、oxlint。
 - 基线提交 `7d82268`，标签 `galaxy-baseline`。
 - `npm run dev:web` 在 `http://localhost:5173`；`?space=workspace` 直接进入书房。
-- **本机 Electron 二进制未下载完成**（`node_modules/electron/dist` 为空，GitHub Releases 下载超时），因此 `npm run dev` / `electron-vite build` 的桌面产物未验证。修法：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install` 或手动放置二进制。
+- **Electron 二进制已在本机装好**（45.4.1）。若新机器 `node_modules/electron/dist` 为空，用镜像下载而非反复重试 GitHub：`https://cdn.npmmirror.com/binaries/electron/<version>/electron-v<version>-win32-x64.zip`，用同目录 `SHASUMS256.txt` 校验后解压到 `node_modules/electron/dist`，并在 `node_modules/electron/path.txt` 写入 `electron.exe`。
+- **本 shell 默认带 `ELECTRON_RUN_AS_NODE=1`**（DSH 自身是 Electron 应用）。启动桌面窗口前必须 `Remove-Item Env:ELECTRON_RUN_AS_NODE`，否则 `electron.exe` 会退化成 Node（`--version` 返回 Node 版本）。
+- **全链路验证脚本**（仓库外，可重建）：用 `electron.exe` 直接跑一个 `.cjs`，创建与主进程同配置的 `BrowserWindow`（`sandbox: true`、preload 指向 `out/preload/index.js`），`loadFile(out/renderer/index.html, { search: 'space=workspace' })`，再 `executeJavaScript` 探测 `window.shiyunDesktop.getRuntimeInfo()`、读 `.workspace-grid` 的 `grid-template-columns`、`capturePage()` 存 PNG。监听 `preload-error` 与 `console-message`，任何 `Unable to load preload` 都必须当作缺陷修掉，不许当警告忽略。
 - 视觉核对可用无头 Edge 截图：
   ```powershell
   & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu `

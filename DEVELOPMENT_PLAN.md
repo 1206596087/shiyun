@@ -40,10 +40,13 @@
 - [x] 全局搜索读取真实图谱，命中后跳回银河并聚焦该节点。
 - [x] 补齐 7 份文档（README / ARCHITECTURE / DATABASE_SCHEMA / DEVELOPMENT_PLAN / DECISIONS / THIRD_PARTY_LICENSES / AGENTS）。
 - [x] 1440×900 视觉核对（浏览器 `?space=workspace` 截图留档于 `docs/screenshots/`）。
+- [x] 实机验证 Electron 窗口（45.4.1）：preload 桥 `window.shiyunDesktop` 可用、IPC 返回 runtime info、书房网格 `236px / 882.4px / 294px`、银河 WebGL 正常（canvas 1783×952）。
+- [x] 修复实机验证暴露的真实缺陷：沙箱下 ESM preload 加载失败（已改 CJS 产物，见 ADR-009）；生产加载补 CSP。
 
-**M1 已知风险（必须如实记录）**
+**M1 遗留风险（必须如实记录）**
 
-- 本机 `node_modules/electron/dist` 为空，Electron 二进制未下载完成，**桌面窗口与 `npm run build` 的 Electron 打包路径未实机验证**；界面验证走 `npm run dev:web`。
+- ~~Electron 二进制未就绪~~：已用 npmmirror 镜像安装并通过 SHA256 校验，桌面路径实机跑通。新机器仍需镜像，见 [AGENTS.md](./AGENTS.md) §7。
+- CSP 当前对 Google Fonts 开两个例外（`fonts.googleapis.com` / `fonts.gstatic.com`），离线时字体回退到系统字体；M7 打包前改自托管。
 - 书房的书籍内容、划线计数、笔记是演示数据；划线/笔记/关联按钮为禁用态，等 M3/M4。不得把它们描述成已实现。
 
 ## M2 · SQLite 书库与文件夹（下一步）

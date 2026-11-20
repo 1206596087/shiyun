@@ -107,6 +107,8 @@ KnowledgeWorkspace          # 三栏布局 + 拖拽 + 状态持久化（唯一�
 | `setWindowOpenHandler` | 一律 `deny` + `shell.openExternal` | 外部链接不进应用窗口 |
 | `will-navigate` | 非受信地址 `preventDefault` | 防止应用内导航到外站 |
 | IPC 来源校验 | `isTrustedSender(frame.url)` | 只接受渲染进程自身（dev server 前缀或 `file://`） |
+| preload 产物格式 | CommonJS（`out/preload/index.js`） | `sandbox: true` 时 preload 不能是 ESM，否则加载失败、桥为空 |
+| CSP | 生产 `file://` 注入；开发不注入 | 硬化生产默认策略，又不挡 Vite HMR；Google Fonts 两个域为已知例外 |
 
 M6 接入 `WebContentsView` 时需要在主进程创建独立的 webContents，并把它的权限（弹窗、下载、权限请求）逐一收紧，不能用 iframe 代替。
 

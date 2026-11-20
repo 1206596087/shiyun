@@ -16,7 +16,7 @@
 | 里程碑 | 内容 | 状态 |
 | --- | --- | --- |
 | M0 | 接管现有原型、基线验证、标签 `galaxy-baseline` | 完成 |
-| M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架 | 完成（Electron 窗口需先完成二进制下载） |
+| M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架 | 完成（桌面窗口已实机验证） |
 | M2 | SQLite 书库、真实文件夹树、导入 PDF/EPUB | 下一步 |
 | M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放） | 未开始 |
 | M4 | 划线、笔记、多对多关联 | 未开始 |
@@ -50,7 +50,9 @@ npm run dev:web
 npm run dev
 ```
 
-> `npm install` 会在 `postinstall` 阶段下载 Electron 二进制（约 100 MB）。如果网络无法访问 GitHub Releases，`node_modules/electron/dist` 会是空的，`npm run dev` 会报错而 `npm run dev:web` 仍可用。可设置镜像后重装：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install`。
+> `npm install` 会在 `postinstall` 阶段下载 Electron 二进制（约 150 MB）。如果网络无法访问 GitHub Releases，`node_modules/electron/dist` 会是空的，`npm run dev` 会报错而 `npm run dev:web` 仍可用。可设置镜像后重装：`ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm install`。也可以用 `https://cdn.npmmirror.com/binaries/electron/<version>/` 直接下载 zip、校验 `SHASUMS256.txt` 后解压到 `node_modules/electron/dist`（详见 [AGENTS.md](./AGENTS.md) §7）。
+>
+> 若终端里有 `ELECTRON_RUN_AS_NODE=1`（某些 Electron 宿主的子进程会继承），启动前需要清掉，否则窗口不会出现。
 
 **校验命令**：
 
@@ -85,10 +87,11 @@ npm run build:web   # 纯网页构建
 
 ### Electron 外壳（M1）
 
-- `electron.vite.config.ts` 分别构建主进程、preload、渲染进程。
+- `electron.vite.config.ts` 分别构建主进程、preload、渲染进程；preload 固定输出 CommonJS（`out/preload/index.js`），因为沙箱化 preload 不支持 ESM（ADR-009）。
 - `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`、`webSecurity: true`。
 - 仅暴露最小 API：`window.shiyunDesktop.getRuntimeInfo()` 与 `openExternal(url)`（限 http/https）。
 - 拒绝 `window.open` 与外部导航，一律转交系统浏览器；IPC 校验消息来源。
+- 生产（`file://`）加载时注入 CSP，开发模式不注入以免挡住 Vite HMR。已实机验证：`window.shiyunDesktop` 可用、IPC 返回 `{ platform: 'win32', electron: '45.4.1' }`。
 
 ## 项目结构
 
@@ -113,7 +116,8 @@ docs/screenshots/       # README 截图
 - 书籍、划线、笔记内容仍是演示数据，保存在 `localStorage`；没有真实文件导入、没有 SQLite、没有迁移与备份（M2 解决）。
 - 阅读区是排版演示，不是真实 PDF/EPUB 渲染（M3）。划线、笔记编辑、关联操作按钮处于禁用状态（M4）。
 - 右侧「网页搜索」不是内嵌浏览器；输入框禁用到 M6 接入 `WebContentsView` 为止。
-- 本机若未完成 Electron 二进制下载，只能在浏览器里验证界面，桌面窗口与打包（M7）未验证。
+- 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
+- 中文正文字体当前来自 Google Fonts CDN，离线时回退到系统字体；M7 打包前自托管并收紧 CSP。
 - 知识布局仍是确定性的银河簇布局，不运行全局力导向模拟。
 
 ## 文档

@@ -4,6 +4,18 @@
 
 ---
 
+## ADR-009 · 沙箱 preload 构建为 CommonJS，生产加载注入 CSP
+
+**背景**：M1 提交后在本机装好 Electron 45.4.1 实机验证，发现 `sandbox: true` 下 preload 被打成 ESM（`out/preload/index.mjs`），Electron 报 `SyntaxError: Cannot use import statement outside a module`，`window.shiyunDesktop` 为 `undefined`——即「外部浏览器打开」在真实桌面里是坏的，而浏览器模式下完全看不出来。同时控制台报 `Insecure Content-Security-Policy` 警告。
+
+**决策**：1）`electron.vite.config.ts` 的 preload 段固定 `output.format: 'cjs'`、`entryFileNames: '[name].js'`，主进程 preload 路径改为 `../preload/index.js`；2）主进程在 `app.whenReady()` 里调用 `installContentSecurityPolicy()`，仅在 `ELECTRON_RENDERER_URL` 未设置（生产 `file://`）时通过 `session.defaultSession.webRequest.onHeadersReceived` 注入 CSP；开发模式不注入，以免挡住 Vite 的内联 HMR 客户端。
+
+**理由**：沙箱化的 preload 不支持 ESM（只有 `sandbox: false` 才支持），而打开沙箱的收益远大于 preload 用 ESM 的便利。CSP 只在生产注入既拿到硬化的默认策略，又不破坏热更新。
+
+**代价**：CSP 当前为 `@import` 的 Google Fonts 开了 `style-src https://fonts.googleapis.com` 与 `font-src https://fonts.gstatic.com` 两个例外，离线时会静默回退到系统字体。**重新评估**：M7 打包前把中文字体自托管，CSP 收紧回 `'self'`。
+
+---
+
 ## ADR-008 · 书房的"未完成功能"一律禁用并标注里程碑
 
 **背景**：需求明确禁止用静态假功能冒充已完成功能，但视觉验收又要求界面完整。
