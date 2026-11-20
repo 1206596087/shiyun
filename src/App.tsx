@@ -5,6 +5,7 @@ import { DebugPanel } from './components/ui/DebugPanel'
 import { InspectorPanel } from './components/ui/InspectorPanel'
 import { KnowledgeExplorer } from './components/ui/KnowledgeExplorer'
 import { TopBar } from './components/ui/TopBar'
+import { KnowledgeWorkspace } from './components/workspace/KnowledgeWorkspace'
 import { loadKnowledgeGraph, saveKnowledgeGraph, validateKnowledgeGraph } from './data/knowledgeRepository'
 import type { GraphLayout, KnowledgeLink, KnowledgeNode, KnowledgeNodeType } from './types/knowledge'
 import { DEFAULT_GALAXY_CONFIG, type GalaxyConfig, type ViewMode } from './types/galaxy'
@@ -14,6 +15,9 @@ const ALL_TYPES = new Set<KnowledgeNodeType>(['topic', 'book', 'highlight', 'not
 const DISCIPLINE_ANGLES: Record<string, number> = { medicine: -0.5, mathematics: 0.76, physics: 2.01, literature: 3.27, philosophy: 4.52 }
 
 function App() {
+  const [activeSpace, setActiveSpace] = useState<'galaxy' | 'workspace'>(() =>
+    new URLSearchParams(window.location.search).get('space') === 'workspace' ? 'workspace' : 'galaxy',
+  )
   const [config, setConfig] = useState<GalaxyConfig>(() => {
     try { return { ...DEFAULT_GALAXY_CONFIG, ...JSON.parse(localStorage.getItem('shiyun-view-config') ?? '{}') } }
     catch { return DEFAULT_GALAXY_CONFIG }
@@ -145,12 +149,14 @@ function App() {
   const statistics = useMemo(() => ({ links: graph.links.length, nodes: nodeCount }), [graph.links.length, nodeCount])
 
   return (
-    <main className={`app-shell mode-${mode}`}>
+    <div className="shiyun-root">
+    <main className={`app-shell galaxy-space space-layer mode-${mode} ${activeSpace === 'galaxy' ? 'is-active' : 'is-inactive'}`} aria-hidden={activeSpace !== 'galaxy'}>
       <GalaxyScene
+        active={activeSpace === 'galaxy'}
         config={config}
         graph={graph}
         mode={mode}
-        paused={paused}
+        paused={paused || activeSpace === 'workspace'}
         selectedNodeId={selectedNodeId}
         selectedLinkId={selectedLinkId}
         visibleTypes={visibleTypes}
@@ -162,7 +168,7 @@ function App() {
         onClearSelection={resetView}
       />
       <div className="vignette" />
-      <TopBar mode={mode} paused={paused} onMode={setMode} onReset={resetView} onPause={() => setPaused((value) => !value)} />
+      <TopBar mode={mode} paused={paused} onMode={setMode} onReset={resetView} onPause={() => setPaused((value) => !value)} onEnterWorkspace={() => setActiveSpace('workspace')} />
       <KnowledgeExplorer graph={graph} visibleTypes={visibleTypes} onToggleType={toggleType} onSelect={selectNode} onAddNote={addNote} onExport={exportJson} onImport={importJson} />
       <DebugPanel config={config} onChange={setConfig} />
       <InspectorPanel
@@ -180,6 +186,13 @@ function App() {
       <div className="interaction-hint"><span>左键旋转</span><span>滚轮缩放</span><span>右键平移</span><span>双击星辰聚焦</span></div>
       {notice && <div className="toast">{notice}</div>}
     </main>
+    <KnowledgeWorkspace
+      active={activeSpace === 'workspace'}
+      graph={graph}
+      onReturnGalaxy={() => setActiveSpace('galaxy')}
+      onOpenNode={(id) => { setActiveSpace('galaxy'); focusNode(id) }}
+    />
+    </div>
   )
 }
 

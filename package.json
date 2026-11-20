@@ -3,13 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "out/main/index.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "electron-vite dev",
+    "dev:web": "vite",
     "typecheck": "tsc -b --pretty false",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && electron-vite build",
+    "build:web": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "electron-vite preview",
+    "preview:web": "vite preview"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
@@ -21,13 +25,20 @@
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@swc/core": "^1.16.22",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.4.1",
+    "electron-vite": "^6.0.0",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
     "vitest": "^5.1.1"
+  },
+  "allowScripts": {
+    "electron@45.4.1": true,
+    "@swc/core@1.16.22": true
   }
 }

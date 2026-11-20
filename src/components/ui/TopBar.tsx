@@ -1,6 +1,6 @@
 import type { ViewMode } from '../../types/galaxy'
 
-export function TopBar({ mode, paused, onMode, onReset, onPause }: { mode: ViewMode; paused: boolean; onMode: (mode: ViewMode) => void; onReset: () => void; onPause: () => void }) {
+export function TopBar({ mode, paused, onMode, onReset, onPause, onEnterWorkspace }: { mode: ViewMode; paused: boolean; onMode: (mode: ViewMode) => void; onReset: () => void; onPause: () => void; onEnterWorkspace: () => void }) {
   return (
     <header className="top-bar">
       <div className="brand-block">
@@ -15,6 +15,7 @@ export function TopBar({ mode, paused, onMode, onReset, onPause }: { mode: ViewM
       <div className="view-actions">
         <button onClick={onPause} title={paused ? '恢复动态效果' : '暂停动态效果'}>{paused ? '▶' : 'Ⅱ'}<span>{paused ? '恢复' : '暂停'}</span></button>
         <button onClick={onReset} title="回到银河全景">◎<span>全景</span></button>
+        <button className="workspace-entry-button" onClick={onEnterWorkspace} title="进入浅色学习书房">▤<span>进入书房</span></button>
       </div>
     </header>
   )

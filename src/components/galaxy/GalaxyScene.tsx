@@ -10,6 +10,7 @@ import type { GalaxyConfig, ViewMode } from '../../types/galaxy'
 import type { KnowledgeGraphData, KnowledgeNodeType } from '../../types/knowledge'
 
 interface Props {
+  active: boolean
   config: GalaxyConfig
   graph: KnowledgeGraphData
   mode: ViewMode
@@ -34,6 +35,7 @@ export function GalaxyScene(props: Props) {
       dpr={dpr}
       camera={{ position: [26, 20, 28], fov: 44, near: 0.05, far: 260 }}
       gl={{ antialias: config.quality !== 'low', powerPreference: 'high-performance', alpha: false }}
+      frameloop={props.active ? 'always' : 'never'}
       onCreated={({ gl, scene }) => {
         gl.outputColorSpace = THREE.SRGBColorSpace
         gl.toneMapping = THREE.ACESFilmicToneMapping

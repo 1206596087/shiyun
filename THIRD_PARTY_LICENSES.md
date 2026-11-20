@@ -2,7 +2,7 @@
 
 本文区分“实际安装的依赖”和“只做研究参考的项目”。诗云当前代码为独立 TypeScript 实现，没有复制下列参考仓库的源码、图像或音频资产。
 
-## 实际依赖
+## 运行时依赖（会随应用分发）
 
 | 项目 | 地址 | 用途 | 许可证 | 需要保留的声明 |
 | --- | --- | --- | --- | --- |
@@ -12,9 +12,32 @@
 | react-postprocessing | https://github.com/pmndrs/react-postprocessing | R3F 后期处理桥接 | MIT | 再分发时保留 MIT 版权与许可文本 |
 | postprocessing | https://github.com/pmndrs/postprocessing | 受控 Bloom 管线 | Zlib | 再分发时保留版权声明与许可证 |
 | React / React DOM | https://github.com/facebook/react | UI 状态与 DOM 渲染 | MIT | 再分发时保留 MIT 版权与许可文本 |
-| Vite | https://github.com/vitejs/vite | 开发服务器与生产构建 | MIT | 再分发时保留 MIT 版权与许可文本 |
 
-完整许可证文本随 npm 包保存在各自的 `node_modules/<package>/LICENSE*` 中；桌面软件打包时应将实际分发依赖的许可证聚合进安装包。
+## 构建与开发依赖（不随应用代码分发，但会进入开发/构建环境）
+
+| 项目 | 地址 | 用途 | 许可证 |
+| --- | --- | --- | --- |
+| Electron | https://github.com/electron/electron | 桌面运行时（含 Chromium 与 Node.js，见其 `LICENSES.chromium.html`） | MIT |
+| electron-vite | https://github.com/alex8088/electron-vite | 主进程 / preload / 渲染进程三份构建 | MIT |
+| Vite | https://github.com/vitejs/vite | 开发服务器与生产构建 | MIT |
+| @vitejs/plugin-react | https://github.com/vitejs/vite-plugin-react | React 的 Babel/SWC 转译与 Fast Refresh | MIT |
+| @swc/core | https://github.com/swc-project/swc | 快速 TS/JS 转译 | Apache-2.0 |
+| TypeScript | https://github.com/microsoft/TypeScript | 类型检查 | Apache-2.0 |
+| Vitest | https://github.com/vitest-dev/vitest | 单元测试 | MIT |
+| oxlint | https://github.com/oxc-project/oxc | Lint | MIT |
+
+完整许可证文本随 npm 包保存在各自的 `node_modules/<package>/LICENSE*` 中；桌面软件打包时应将实际分发依赖的许可证聚合进安装包。Electron 打包（M7）时必须额外附带 `LICENSES.chromium.html`，这是 Chromium 二进制分发的强制性要求。
+
+## 已确定将在后续里程碑引入的依赖（尚未安装）
+
+| 项目 | 里程碑 | 用途 | 许可证 | 备注 |
+| --- | --- | --- | --- | --- |
+| better-sqlite3 | M2 | 主进程 SQLite 驱动 | MIT | 原生模块，需 `electron-rebuild`；见 DECISIONS ADR-002 |
+| pdfjs-dist | M3 | PDF 渲染与文本层 | Apache-2.0 | 需保留 `LICENSE`；不使用其内置 viewer 的打包资产 |
+| epubjs | M3 | EPUB 解析与 CFI 定位 | BSD-2-Clause | 需保留版权声明与许可条件 |
+| @tiptap/react | M4 | 笔记富文本编辑 | MIT | 依赖 `@tiptap/starter-kit` 等，全部 MIT |
+
+引入时把实际版本号与许可证文本补进本表，并同步更新 [DECISIONS.md](./DECISIONS.md)。
 
 ## 研究参考（未复制代码）
 
