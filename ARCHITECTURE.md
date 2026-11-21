@@ -248,3 +248,8 @@ M6 接入 `WebContentsView` 时需要在主进程创建独立的 webContents，�
 - 单元测试（Vitest）：仓储序列化与校验、布局数学、纯函数工具。当前 `src/data/knowledgeRepository.test.ts` 覆盖存取与非法数据拒绝。
 - 每个里程碑必须保持 `typecheck / lint / test / build` 全绿，并把该里程碑的验收项写进 `DEVELOPMENT_PLAN.md`。
 - WebGL 与 Electron 窗口不做自动化截图测试（本机可能没有 GPU / Electron 二进制），以手动验收 + 浏览器截图留档为准。
+# 0.2.0 架构增量
+
+`maintenanceIpc.ts` 管理设置、回收站和导出；所有调用校验 IPC 来源，目录打开只接受 data/logs 枚举。`fileResponse.ts` 用文件句柄逐块读取，取消时释放句柄。`ReaderPane` 按格式懒加载阅读器。`002_note_search` 在主进程用 FTS5 trigram 与触发器维护笔记索引。`bundle.ts` 从安全快照生成带 manifest 的流式包；离线恢复脚本只创建新目录。
+
+桌面验证可显式设置 `SHIYUN_DATA_DIR`，默认用户目录规则不变。后续章节保留早期架构沿革，早期 better-sqlite3 计划已由 node:sqlite 替代。

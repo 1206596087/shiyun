@@ -35,14 +35,14 @@ afterEach(() => {
 describe('迁移', () => {
   it('首次运行应用 001，重复运行不再重复应用', () => {
     // beforeEach 里已经跑过一次
-    expect(currentVersion(db)).toBe(1)
+    expect(currentVersion(db)).toBe(2)
     expect(pendingVersions(db)).toEqual([])
 
     const again = runMigrations(db)
     expect(again).toEqual([])
 
     const rows = queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM schema_migrations')
-    expect(rows?.count).toBe(1)
+    expect(rows?.count).toBe(2)
   })
 })
 

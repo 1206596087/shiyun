@@ -61,18 +61,22 @@ export function NoteEditor({ noteId, annotations, onOpenSource, onTitleChange }:
     }
   }, [annotations, noteId])
 
+  const savingRef = useRef<Promise<void>>(Promise.resolve())
   const flush = useCallback(() => {
     const patch = pendingRef.current
-    if (!patch) return
+    if (!patch) return savingRef.current
     pendingRef.current = null
     setStatus('saving')
-    void annotations.updateNote(noteId, patch).then(
-      (updated) => {
-        noteRef.current = updated
-        setStatus('saved')
-      },
-      () => setStatus('idle'),
-    )
+    const saving = savingRef.current.then(async () => {
+      const updated = await annotations.updateNote(noteId, patch)
+      noteRef.current = updated
+      setStatus('saved')
+    })
+    savingRef.current = saving.catch(() => {
+      pendingRef.current = { ...patch, ...pendingRef.current }
+      setStatus('idle')
+    })
+    return saving
   }, [annotations, noteId])
 
   const schedule = useCallback(
@@ -82,7 +86,7 @@ export function NoteEditor({ noteId, annotations, onOpenSource, onTitleChange }:
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
         timerRef.current = null
-        flush()
+        void flush().catch(() => undefined)
       }, AUTOSAVE_MS)
     },
     [flush],
@@ -91,7 +95,7 @@ export function NoteEditor({ noteId, annotations, onOpenSource, onTitleChange }:
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
-      flush()
+      void flush().catch(() => undefined)
     }
   }, [flush])
 
@@ -125,6 +129,16 @@ export function NoteEditor({ noteId, annotations, onOpenSource, onTitleChange }:
       }}
       onChange={(body, bodyText) => schedule({ body, bodyText })}
       onOpenSource={onOpenSource}
+      onDelete={async () => {
+        if (timerRef.current) clearTimeout(timerRef.current)
+        try {
+          await savingRef.current
+          await flush()
+          await annotations.deleteNote(noteId)
+          setLoaded({ noteId, note: null, linked: [], error: '已移至回收站，可从「设置与回收站」恢复，正文和划线关联均保留。' })
+          window.dispatchEvent(new Event('shiyun-library-changed'))
+        } catch (error) { window.alert(String(error)) }
+      }}
       onRun={(action) => {
         if (!note) return
         void action(note)
@@ -138,6 +152,7 @@ export function NoteEditor({ noteId, annotations, onOpenSource, onTitleChange }:
 }
 
 interface BodyProps {
+  onDelete: () => Promise<void>
   noteId: string
   note: Note
   linked: Highlight[]
@@ -290,13 +305,10 @@ function NoteEditorBody(props: BodyProps) {
         <button
           className="is-danger"
           onClick={() => {
-            if (!window.confirm('删除这篇笔记？划线会保留，只是不再关联。')) return
-            props.onRun(() => {
-              void annotations.deleteNote(props.noteId)
-            })
+            void props.onDelete()
           }}
         >
-          删除笔记
+          移至回收站
         </button>
       </footer>
     </div>

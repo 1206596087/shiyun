@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 
@@ -23,18 +23,17 @@ export function listBackups(backupDir: string): { name: string; path: string; mt
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
 }
 
-/**
- * 复制一份库文件到 backups/，并只保留最近 BACKUP_KEEP 份。
- *
- * WAL 模式下必须先 checkpoint，否则复制到的 .db 可能缺少最近的提交。
- * 备份只包含数据库，不含 books/ 里的原始文件（那些是用户自己的书）。
- */
+/** Consistent SQLite snapshot, independent of uncheckpointed WAL pages. */
 export function createBackup(db: DatabaseSync, dbFile: string, backupDir: string, now = new Date(), keep = BACKUP_KEEP): string {
   if (!existsSync(dbFile)) throw new Error(`数据库文件不存在：${dbFile}`)
   mkdirSync(backupDir, { recursive: true })
-  db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-  const target = join(backupDir, backupFileName(now))
-  copyFileSync(dbFile, target)
+  let stamp = now.getTime()
+  let target = join(backupDir, backupFileName(new Date(stamp)))
+  while (existsSync(target)) {
+    stamp += 1000
+    target = join(backupDir, backupFileName(new Date(stamp)))
+  }
+  db.prepare('VACUUM INTO ?').run(target)
 
   for (const stale of listBackups(backupDir).slice(keep)) {
     rmSync(stale.path, { force: true })

@@ -1,3 +1,4 @@
+import type { MaintenanceApi } from '../../src/types/maintenance.ts'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { ImportReport, LibraryNodeKind, LibraryTree } from '../../src/types/library.ts'
 import type { BookSource, ReadingState, SaveReadingStatePayload } from '../../src/types/reader.ts'
@@ -54,6 +55,7 @@ export interface ShiyunAnnotationApi {
   deleteHighlight: (highlightId: string) => Promise<void>
   notesForHighlight: (highlightId: string) => Promise<Note[]>
   highlightsForNote: (noteId: string) => Promise<Highlight[]>
+  searchNotes: (query: string) => Promise<Note[]>
   listNotes: () => Promise<Note[]>
   getNote: (noteId: string) => Promise<Note | null>
   createNote: (input: CreateNoteInput) => Promise<Note>
@@ -85,6 +87,7 @@ export interface ShiyunResearchApi {
 }
 
 export interface ShiyunDesktopApi {
+  maintenance: MaintenanceApi
   getRuntimeInfo: () => Promise<{ platform: string; version: string; electron: string }>
   openExternal: (url: string) => Promise<void>
   library: ShiyunLibraryApi
@@ -117,6 +120,7 @@ const annotations: ShiyunAnnotationApi = {
   deleteHighlight: (highlightId) => ipcRenderer.invoke('annotation:deleteHighlight', { highlightId }),
   notesForHighlight: (highlightId) => ipcRenderer.invoke('annotation:notesForHighlight', { highlightId }),
   highlightsForNote: (noteId) => ipcRenderer.invoke('annotation:highlightsForNote', { noteId }),
+  searchNotes: (query) => ipcRenderer.invoke('annotation:searchNotes', query),
   listNotes: () => ipcRenderer.invoke('annotation:listNotes'),
   getNote: (noteId) => ipcRenderer.invoke('annotation:getNote', { noteId }),
   createNote: (input) => ipcRenderer.invoke('annotation:createNote', input),
@@ -151,6 +155,14 @@ const research: ShiyunResearchApi = {
 }
 
 const desktopApi: ShiyunDesktopApi = {
+  maintenance: {
+    exportBundle: () => ipcRenderer.invoke('maintenance:exportBundle'),
+    status: () => ipcRenderer.invoke('maintenance:status'),
+    trash: () => ipcRenderer.invoke('maintenance:trash'),
+    restore: (kind, id) => ipcRenderer.invoke('maintenance:restore', kind, id),
+    openDirectory: (kind) => ipcRenderer.invoke('maintenance:openDirectory', kind),
+    backup: () => ipcRenderer.invoke('maintenance:backup'),
+  },
   getRuntimeInfo: () => ipcRenderer.invoke('app:get-runtime-info'),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   library,

@@ -21,6 +21,7 @@ export interface AnnotationBridge {
   deleteHighlight: (highlightId: string) => Promise<void>
   notesForHighlight: (highlightId: string) => Promise<Note[]>
   highlightsForNote: (noteId: string) => Promise<Highlight[]>
+  searchNotes: (query: string) => Promise<Note[]>
   listNotes: () => Promise<Note[]>
   getNote: (noteId: string) => Promise<Note | null>
   createNote: (input: CreateNoteInput) => Promise<Note>
@@ -159,6 +160,7 @@ function createDemoBridge(): AnnotationBridge {
         (highlight) => note.highlightIds.includes(highlight.id) && !unlinked.has(`${highlight.id}:${noteId}`),
       )
     },
+    searchNotes: async (query) => notes.filter((note) => (note.title + ' ' + note.bodyText).toLowerCase().includes(query.toLowerCase())),
     listNotes: async () => [...notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     getNote: async (noteId) => notes.find((note) => note.id === noteId) ?? null,
     createNote: async (input) => {
@@ -220,6 +222,7 @@ function createDesktopBridge(api: NonNullable<Window['shiyunDesktop']>['annotati
     deleteHighlight: (id) => api.deleteHighlight(id),
     notesForHighlight: (id) => api.notesForHighlight(id),
     highlightsForNote: (id) => api.highlightsForNote(id),
+    searchNotes: (query) => api.searchNotes(query),
     listNotes: () => api.listNotes(),
     getNote: (id) => api.getNote(id),
     createNote: (input) => api.createNote(input),

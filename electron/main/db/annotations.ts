@@ -144,7 +144,7 @@ export function createHighlight(db: DatabaseSync, input: CreateHighlightInput): 
 export function listHighlights(db: DatabaseSync, bookId: string): Highlight[] {
   const rows = queryAll<HighlightRow>(
     db,
-    `SELECT h.*, (SELECT COUNT(*) FROM highlight_notes hn WHERE hn.highlight_id = h.id) AS note_count
+    `SELECT h.*, (SELECT COUNT(*) FROM highlight_notes hn JOIN notes n ON n.id = hn.note_id AND n.deleted_at IS NULL WHERE hn.highlight_id = h.id) AS note_count
        FROM highlights h
       WHERE h.book_id = ?
       ORDER BY h.locator_type, h.page, h.created_at`,
@@ -157,7 +157,7 @@ export function listHighlights(db: DatabaseSync, bookId: string): Highlight[] {
 export function listAllHighlights(db: DatabaseSync, limit = 200): Highlight[] {
   const rows = queryAll<HighlightRow>(
     db,
-    `SELECT h.*, (SELECT COUNT(*) FROM highlight_notes hn WHERE hn.highlight_id = h.id) AS note_count
+    `SELECT h.*, (SELECT COUNT(*) FROM highlight_notes hn JOIN notes n ON n.id = hn.note_id AND n.deleted_at IS NULL WHERE hn.highlight_id = h.id) AS note_count
        FROM highlights h
        JOIN books b ON b.id = h.book_id AND b.deleted_at IS NULL
       ORDER BY h.created_at DESC
@@ -169,7 +169,7 @@ export function listAllHighlights(db: DatabaseSync, limit = 200): Highlight[] {
 
 export function getHighlight(db: DatabaseSync, highlightId: string): Highlight | undefined {  const row = queryOne<HighlightRow>(
     db,
-    `SELECT h.*, (SELECT COUNT(*) FROM highlight_notes hn WHERE hn.highlight_id = h.id) AS note_count
+    `SELECT h.*, (SELECT COUNT(*) FROM highlight_notes hn JOIN notes n ON n.id = hn.note_id AND n.deleted_at IS NULL WHERE hn.highlight_id = h.id) AS note_count
        FROM highlights h WHERE h.id = ?`,
     highlightId,
   )
@@ -240,10 +240,9 @@ export function updateNote(db: DatabaseSync, noteId: string, input: UpdateNoteIn
   return toNote(db, row)
 }
 
-/** 删笔记是软删，且不删划线：关系行删掉，实体保留（划线还在） */
+/** Soft deletion preserves highlight associations for recovery. */
 export function deleteNote(db: DatabaseSync, noteId: string): void {
   transaction(db, () => {
-    execute(db, 'DELETE FROM highlight_notes WHERE note_id = ?', noteId)
     execute(db, 'UPDATE notes SET deleted_at = ?, updated_at = ? WHERE id = ?', nowIso(), nowIso(), noteId)
   })
 }
@@ -318,4 +317,17 @@ export function countAnnotations(db: DatabaseSync): { highlights: number; notes:
     notes: notes?.count ?? 0,
     links: links?.count ?? 0,
   }
+}
+
+export function restoreNote(db: DatabaseSync, noteId: string): void {
+  execute(db, 'UPDATE notes SET deleted_at = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL', nowIso(), noteId)
+}
+
+export function searchNotes(db: DatabaseSync, query: string): Note[] {
+  const term = query.trim().slice(0, 200)
+  if (!term) return listNotes(db)
+  const rows = [...term].length >= 3
+    ? queryAll<NoteRow>(db, `SELECT n.* FROM note_search s JOIN notes n ON n.id = s.id WHERE note_search MATCH ? AND n.deleted_at IS NULL ORDER BY rank LIMIT 100`, '"' + term.replaceAll('"', '""') + '"')
+    : queryAll<NoteRow>(db, `SELECT * FROM notes WHERE deleted_at IS NULL AND (instr(lower(title), lower(?)) > 0 OR instr(lower(body_text), lower(?)) > 0) ORDER BY updated_at DESC LIMIT 100`, term, term)
+  return rows.map((row) => toNote(db, row))
 }

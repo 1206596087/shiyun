@@ -155,6 +155,14 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
     }
   }
 
+  useEffect(() => {
+    const changed = () => {
+      void bridgeRef.current?.listTree().then(setLibrary)
+    }
+    window.addEventListener('shiyun-library-changed', changed)
+    return () => window.removeEventListener('shiyun-library-changed', changed)
+  }, [])
+
   /** 笔记标签页的 id 就是笔记 ID；标题取「显式标题 → 正文首行」。 */
   const openNoteTab = async (noteId: string) => {
     if (state.tabs.some((tab) => tab.id === noteId)) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KnowledgeGraphData, KnowledgeNode, KnowledgeNodeType } from '../../types/knowledge'
 import { IconMark, IconSearch, IconSliders, IconSparkle } from './icons'
+import { MaintenancePanel } from './MaintenancePanel'
 
 const TYPE_LABEL: Record<KnowledgeNodeType, string> = { book: '书籍', highlight: '划线', note: '笔记', topic: '主题' }
 
@@ -16,6 +17,7 @@ interface Props {
 export function WorkspaceHeader({ graph, rightVisible, onReturnGalaxy, onToggleRight, onResetLayout, onOpenNode }: Props) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const toolsRef = useRef<HTMLDivElement>(null)
@@ -65,6 +67,8 @@ export function WorkspaceHeader({ graph, rightVisible, onReturnGalaxy, onToggleR
       </div>
 
       <div className="ws-tools" ref={toolsRef}>
+        <button onClick={() => { if (rightVisible) onToggleRight(); setMaintenanceOpen(true) }}>设置与回收站</button>
+        {maintenanceOpen && <MaintenancePanel onClose={() => setMaintenanceOpen(false)} />}
         <button className="ws-return" onClick={onReturnGalaxy}>
           <IconSparkle size={14} />
           <span>返回银河</span>

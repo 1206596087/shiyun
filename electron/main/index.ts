@@ -1,5 +1,6 @@
+import { registerMaintenanceIpc } from './maintenanceIpc.ts'
 import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron'
-import { readFile } from 'node:fs/promises'
+import { fileResponse } from './fileResponse.ts'
 import { join } from 'node:path'
 import { registerAnnotationIpc } from './annotationIpc.ts'
 import { registerGraphIpc } from './graphIpc.ts'
@@ -16,7 +17,7 @@ let mainWindow: BrowserWindow | null = null
  * 理由：开发模式、安装版、以后的自动更新必须读写同一个书库；用户的书不能因为换了一个
  * 启动方式就"消失"。升级安装也不动这个目录，卸载时同样不删（见 AGENTS §8）。
  */
-app.setPath('userData', join(app.getPath('appData'), 'shiyun'))
+app.setPath('userData', process.env.SHIYUN_DATA_DIR || join(app.getPath('appData'), 'shiyun'))
 
 /**
  * 书籍文件通过自定义协议交给渲染进程，而不是让渲染层拿到绝对路径：
@@ -59,6 +60,7 @@ function installContentSecurityPolicy() {
 function registerBookProtocol() {
   protocol.handle(BOOK_SCHEME, async (request) => {
     const url = new URL(request.url)
+    if (url.hostname !== 'book' || !['GET', 'HEAD'].includes(request.method)) return new Response('Not found', { status: 404 })
     // 形如 shiyun-book://book/<id>/source.<ext>：第一段是书籍 ID，其余段只允许指向该书的源文件。
     const segments = url.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part))
     const bookId = segments[0] ?? ''
@@ -72,39 +74,7 @@ function registerBookProtocol() {
       return new Response('Not found', { status: 404 })
     }
 
-    const buffer = await readFile(resolved.filePath)
-    const mime = resolved.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
-    const total = buffer.byteLength
-    const range = request.headers.get('range')
-
-    if (range) {
-      const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
-      if (match) {
-        const start = match[1] ? Number.parseInt(match[1], 10) : 0
-        const end = match[2] ? Number.parseInt(match[2], 10) : total - 1
-        if (Number.isFinite(start) && Number.isFinite(end) && start <= end && start < total) {
-          const slice = buffer.subarray(start, Math.min(end, total - 1) + 1)
-          return new Response(slice, {
-            status: 206,
-            headers: {
-              'Content-Type': mime,
-              'Content-Length': String(slice.byteLength),
-              'Content-Range': `bytes ${start}-${start + slice.byteLength - 1}/${total}`,
-              'Accept-Ranges': 'bytes',
-            },
-          })
-        }
-      }
-    }
-
-    return new Response(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': mime,
-        'Content-Length': String(total),
-        'Accept-Ranges': 'bytes',
-      },
-    })
+    return fileResponse(resolved.filePath, request, resolved.format === 'pdf' ? 'application/pdf' : 'application/epub+zip')
   })
 }
 
@@ -119,6 +89,7 @@ function assertTrustedSender(url: string) {
 }
 
 function registerIpc() {
+  registerMaintenanceIpc(assertTrustedSender)
   registerLibraryIpc(assertTrustedSender)
   registerAnnotationIpc(assertTrustedSender)
   registerGraphIpc(assertTrustedSender)

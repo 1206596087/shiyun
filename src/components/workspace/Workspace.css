@@ -542,3 +542,18 @@
   font-size: 11.5px; text-align: left;
 }
 .annotation-item__links button:hover { background: var(--ws-hover); color: var(--ws-ink); }
+.ws-maintenance {
+  position: fixed;
+  inset: 80px 12% 60px;
+  z-index: 100;
+  overflow: auto;
+  background: #fffdf9;
+  color: #292723;
+  border: 1px solid #ddd8cf;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 16px 60px #0003;
+}
+.ws-maintenance header { display: flex; justify-content: space-between; align-items: center; }
+.ws-maintenance p { overflow-wrap: anywhere; }
+.ws-maintenance button { margin: 6px; padding: 6px 12px; }

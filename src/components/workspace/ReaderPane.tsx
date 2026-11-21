@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { LibraryBridge } from '../../data/libraryBridge'
 import type { AnnotationBridge } from '../../data/annotationBridge'
 import type { BookSource, SaveReadingStatePayload } from '../../types/reader'
 import type { Highlight, Note, TextSelectionAnchor } from '../../types/annotation'
 import { describeLocator, readableNoteTitle } from '../../types/annotation'
-import { EpubReader } from './EpubReader'
-import { PdfReader } from './PdfReader'
+const EpubReader = lazy(() => import('./EpubReader').then((module) => ({ default: module.EpubReader })))
+const PdfReader = lazy(() => import('./PdfReader').then((module) => ({ default: module.PdfReader })))
 import { IconBook, IconHighlight, IconNote } from './icons'
 
 export interface ReaderFocus {
@@ -289,7 +289,7 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
 
   return (
     <>
-      {reader}
+      <Suspense fallback={<p className="book-reader__status">正在加载阅读器…</p>}>{reader}</Suspense>
       {selection && (
         <div
           className="selection-toolbar"

@@ -9,6 +9,7 @@ import type {
 } from '../../src/types/annotation.ts'
 import { isLocatorType, parseRects } from '../../src/types/annotation.ts'
 import {
+  searchNotes,
   createHighlight,
   createNote,
   deleteHighlight,
@@ -148,6 +149,12 @@ export function registerAnnotationIpc(assertTrusted: TrustCheck) {
     assertTrusted(event.senderFrame?.url ?? '')
     const { db } = requireLibrary()
     return highlightsForNote(db, asString(asRecord(payload), 'noteId'))
+  })
+
+  ipcMain.handle('annotation:searchNotes', (event, query: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    if (typeof query !== 'string' || query.length > 200) throw new TypeError('Invalid query')
+    return searchNotes(requireLibrary().db, query)
   })
 
   ipcMain.handle('annotation:listNotes', (event): Note[] => {

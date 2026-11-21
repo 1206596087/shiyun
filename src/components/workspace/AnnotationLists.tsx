@@ -95,10 +95,11 @@ export function HighlightListPage({ annotations, bookTitle, onOpenSource, onCrea
 /** 「我的笔记」：所有笔记，显示标题来源（显式标题或正文首行）与关联划线。 */
 export function NoteListPage({ annotations, bookTitle, onOpenNote, onFocusHighlight }: NoteProps) {
   const [state, setState] = useState<Loaded<Note[]>>({ items: EMPTY_NOTES, error: null, loading: true })
+  const [query, setQuery] = useState('')
   const [linked, setLinked] = useState<Record<string, Highlight[]>>({})
 
   const reload = useCallback(() => {
-    annotations.listNotes().then(
+    annotations.searchNotes(query).then(
       (items) => {
         setState({ items, error: null, loading: false })
         void Promise.all(items.map((note) => annotations.highlightsForNote(note.id))).then((groups) => {
@@ -109,7 +110,7 @@ export function NoteListPage({ annotations, bookTitle, onOpenNote, onFocusHighli
       },
       (reason: unknown) => setState({ items: EMPTY_NOTES, error: message(reason), loading: false }),
     )
-  }, [annotations])
+  }, [annotations, query])
 
   useEffect(() => {
     reload()
@@ -120,6 +121,7 @@ export function NoteListPage({ annotations, bookTitle, onOpenNote, onFocusHighli
       <header className="annotation-page__head">
         <p className="annotation-page__kind"><IconNote size={13} />我的笔记</p>
         <h1>全部笔记</h1>
+        <input aria-label="搜索笔记正文" placeholder="搜索正文或中文术语" maxLength={200} value={query} onChange={(event) => setQuery(event.target.value)} />
         <p className="annotation-page__meta">
           {state.loading ? '正在读取书库…' : `${state.items.length} 篇笔记`}
           <button className="annotation-page__refresh" onClick={reload} title="刷新列表">
@@ -144,6 +146,7 @@ export function NoteListPage({ annotations, bookTitle, onOpenNote, onFocusHighli
               <button className="annotation-item__title" onClick={() => onOpenNote(note.id)}>
                 {readableNoteTitle(note.title, note.bodyText)}
               </button>
+              <p>{note.bodyText.slice(Math.max(0, note.bodyText.toLowerCase().indexOf(query.toLowerCase()) - 40), Math.max(0, note.bodyText.toLowerCase().indexOf(query.toLowerCase()) - 40) + 200).split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")).map((part, index) => query && part.toLowerCase() === query.toLowerCase() ? <mark key={index}>{part}</mark> : part)}</p>
               <p className="annotation-item__meta">
                 <IconLink size={12} />
                 {highlights.length > 0 ? `关联 ${highlights.length} 条划线` : '还没关联划线'}

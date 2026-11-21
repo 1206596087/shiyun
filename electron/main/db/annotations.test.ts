@@ -4,6 +4,8 @@ import { openDatabase } from './connection.ts'
 import { runMigrations } from './migrate.ts'
 import { insertBook } from './library.ts'
 import {
+  restoreNote,
+  searchNotes,
   countAnnotations,
   createHighlight,
   createNote,
@@ -185,5 +187,29 @@ describe('笔记正文', () => {
     makeHighlight()
     createNote(db, { bodyText: '一条笔记' })
     expect(countAnnotations(db)).toEqual({ highlights: 1, notes: 1, links: 0 })
+  })
+})
+
+describe('0.2.0 recovery and search', () => {
+  it('restores updated text and three original links', () => {
+    const ids = [makeHighlight(), makeHighlight(), makeHighlight()]
+    const note = createNote(db, { bodyText: 'old', highlightId: ids[0] })
+    for (const id of ids.slice(1)) linkHighlightNote(db, id, note.id)
+    updateNote(db, note.id, { bodyText: 'new logistic regression' })
+    deleteNote(db, note.id)
+    expect(searchNotes(db, 'logistic')).toHaveLength(0)
+    expect(listHighlights(db, BOOK_ID).every(h => h.noteCount === 0)).toBe(true)
+    restoreNote(db, note.id)
+    expect(getNote(db, note.id)?.highlightIds.sort()).toEqual(ids.sort())
+    expect(getNote(db, note.id)?.bodyText).toBe('new logistic regression')
+    expect(searchNotes(db, 'logistic')).toHaveLength(1)
+  })
+  it('updates the index and safely quotes query syntax', () => {
+    const note = createNote(db, { bodyText: 'logistic' })
+    expect(searchNotes(db, 'logistic')).toHaveLength(1)
+    updateNote(db, note.id, { bodyText: 'replacement' })
+    expect(searchNotes(db, 'logistic')).toHaveLength(0)
+    expect(searchNotes(db, 'replacement')).toHaveLength(1)
+    expect(searchNotes(db, '" OR *')).toHaveLength(0)
   })
 })

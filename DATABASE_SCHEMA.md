@@ -186,3 +186,10 @@ M2 首次启动时：
 - 自动（已实现 `electron/main/db/backup.ts`）：每次启动若距上次备份超过 24 小时，复制一份库文件到 `backups/`；最多保留 14 份，超出按时间删除最旧的。迁移前也会先备份。
 - 手动（计划中，M7）：设置页「立即备份 / 打开备份目录 / 从备份恢复」。恢复前先关闭数据库连接并把当前库另存为 `pre-restore-<time>.db`。
 - 备份只复制 `shiyun.db`（WAL 模式先执行 `PRAGMA wal_checkpoint(TRUNCATE)`），不复制 `books/` 源文件；导出为可迁移包（M7）时再打 zip。
+# 0.2.0 数据库增量
+
+版本 2 新增 `note_search`（FTS5，id 不索引、title/body_text 使用 trigram）及 notes 的插入/更新/删除触发器。它是可重建索引，不复制知识身份。001 不变，迁移事务和迁移前备份继续保留。
+
+笔记软删保留 highlight_notes；计数只统计未删除笔记。restoreNote 清空 deleted_at，索引自动恢复。旧版本已硬删的关联不能自动还原。结构回退应使用迁移前快照在独立目录恢复，不直接改已应用迁移。
+
+数据库备份及完整导出使用 VACUUM INTO 一致性快照，替代早期 checkpoint 后直接复制方案。完整包还包括管理的文件，参见 docs/BUNDLE_RECOVERY.md。

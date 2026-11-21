@@ -246,3 +246,8 @@ docs/screenshots/       # README 截图
 ## 开源与参考
 
 项目没有复制参考仓库的代码；视觉数学、粒子分层与交互范式来自公开项目的研究。依赖许可证、参考来源与声明义务见 [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。
+# 0.2.0 开发候选（2026-11-21）
+
+本机已新增真 Range 文件读取、PDF/EPUB 懒加载、设置与回收站、保留关联的笔记恢复、FTS5 笔记全文检索、完整知识库导出。没有重建银河或替换书库。
+
+当前为开发候选，尚未完成 Windows 和复杂教材性能验收。详见 [开发验证记录](docs/0.2.0-validation.md) 与 [知识库恢复说明](docs/BUNDLE_RECOVERY.md)。下文 M0–M7 是原版本历史说明，不代表 prompt2 中所有细项已完整验收。

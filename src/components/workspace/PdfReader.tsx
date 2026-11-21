@@ -73,7 +73,7 @@ export function PdfReader(props: Props) {
   // 打开文档
   useEffect(() => {
     let cancelled = false
-    const task = getDocument({ url, cMapUrl: CMAP_URL, cMapPacked: true, standardFontDataUrl: STANDARD_FONT_URL })
+    const task = getDocument({ url, disableStream: true, disableAutoFetch: true, rangeChunkSize: 65536, cMapUrl: CMAP_URL, cMapPacked: true, standardFontDataUrl: STANDARD_FONT_URL })
     task.promise.then(
       async (next) => {
         if (cancelled) return

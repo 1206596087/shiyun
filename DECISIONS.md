@@ -272,3 +272,12 @@
 **理由**：让"好看"与"可查询"解耦；粒子数量可以随时调整而不影响知识库；避免点击粒子反查知识的脆弱实现。
 
 **代价**：星图布局不能直接用力导向模拟粒子的位置，需要单独的 `graph_layouts` 表（M5）。**重新评估**：M5 若发现布局表达力不足，引入受约束的力导向布局，但仍写入 `graph_layouts`。
+## ADR-019 · 0.2.0 按修订范围增量交付
+
+按 prompt3 §41–46 执行，连续滚动、多行高亮和多标签留给 0.3.0。新知识类型的 CHECK 表重建留到对应版本，不提前扩散实体类型。
+
+不新增依赖：Node.js 内置 FileHandle.read 控制每次最多 64 KiB 并响应取消；React.lazy 分离 PDF/EPUB；SQLite FTS5 trigram 增量检索，短于三字符降级子串匹配。全文查询作为字面短语引用，结果只用 React 文本呈现，避免注入 HTML。
+
+导出选择带 JSON manifest 的无压缩顺序容器，避免大书库被整体加载进内存，也不引入归档依赖。代价是非通用 ZIP，必须配套还原工具。VACUUM INTO 获取数据库快照；导出前后校验每个源文件，源内容变化时失败，不发布半包。UI 偏好暂不包含在包中。旧笔记正文格式不变。
+
+参考：[Node.js 文件 API](https://github.com/nodejs/node/blob/main/doc/api/fs.md)、[SQLite FTS5](https://www.sqlite.org/fts5.html)、[SQLite VACUUM INTO](https://www.sqlite.org/lang_vacuum.html)。Node.js 代码主体 MIT、SQLite public domain；只调用既有运行时 API，未复制第三方实现、未新增分发组件。未来重型编辑器按需加载。

@@ -123,3 +123,8 @@ M6 的实测口径（复验时照做）：`electron.exe . --remote-debugging-por
 M5 已经落地的东西不要重做：`src/data/graphProjection.ts`（纯函数投影 + 9 个单测）、`electron/main/db/graph.ts`（读源 + 回填坐标）、`graphIpc.ts` 三个通道、`src/data/graphBridge.ts`（桌面 / 浏览器双实现）、`KnowledgeLayer` 的拖拽与 `CameraController` 的 `disabled`。**银河里的点只能来自书库实体**，不要为了「演示好看」在渲染进程里造节点（ADR-016）。
 
 M4 已经落地的东西不要重做：划线定位（页码 + 归一化矩形 / CFI）、自绘叠加层、TipTap 笔记、`highlight_notes` 多对多、删除语义，都在 `annotations.ts` / `ReaderPane.tsx` / `NoteEditor.tsx` / `AnnotationLists.tsx` 里，有 36 个单测护着。
+## 本机接续开发 2026-11-21
+
+当前在 macOS 的 `/Users/cc/Documents/ChatGPT/project1/shiyun` 接续，Windows 路径与旧验收记录只属历史。按 prompt3 末尾修订推进 0.2.0；真实状态见 docs/0.2.0-validation.md。现有源码来自 GitHub 压缩包，本地 Git 基线 e92e14c 不是远端历史，不可强制推送覆盖 GitHub。
+
+数据库已新增 002 索引迁移；笔记软删必须保留关联。测试桌面用独立 SHIYUN_DATA_DIR，绝不把测试数据写入真实书库。`scripts/e2e/desktop-smoke.mjs` 连接本机 9337 端口，仅允许 shiyun-desktop-validation 测试目录。运行 Electron 前移除 ELECTRON_RUN_AS_NODE。离线还原脚本只接受新目录。
