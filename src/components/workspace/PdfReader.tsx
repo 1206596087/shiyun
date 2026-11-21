@@ -6,6 +6,7 @@ import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, clampPage, clampZoom } from '../../types
 import type { Highlight, TextSelectionAnchor } from '../../types/annotation'
 import { buildContext, normalizeQuote, normalizeRects } from '../../types/annotation'
 import { horizontalScale, layoutTextSpans } from './pdfTextLayer'
+import { PdfContinuousView } from './PdfContinuousView'
 import { IconBook, IconList } from './icons'
 
 GlobalWorkerOptions.workerSrc = workerUrl
@@ -15,6 +16,7 @@ const CMAP_URL = '/pdfjs/cmaps/'
 const STANDARD_FONT_URL = '/pdfjs/standard_fonts/'
 /** 单条划线最长存 2000 字，超长多半是整页误选 */
 const MAX_QUOTE = 2000
+const PDF_VIEW_MODE_KEY = 'shiyun-pdf-continuous-experiment-v1'
 
 export interface PdfOutlineEntry {
   title: string
@@ -49,6 +51,8 @@ export function PdfReader(props: Props) {
   const [outline, setOutline] = useState<PdfOutlineEntry[]>([])
   const [tocOpen, setTocOpen] = useState(false)
   const [pageBox, setPageBox] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
+  const [continuous, setContinuous] = useState(() => localStorage.getItem(PDF_VIEW_MODE_KEY) === 'on')
+  const [scrollRequest, setScrollRequest] = useState<{ page: number; token: number } | null>(null)
 
   // 载入状态从 state 派生：换书后旧文档立刻失效，不需要在 effect 里同步置空。
   const doc = loaded.url === url ? loaded.doc : null
@@ -69,6 +73,10 @@ export function PdfReader(props: Props) {
   const [seenFocus, setSeenFocus] = useState(0)
   const focusPage = focus && focus.token > seenFocus ? clampPage(focus.page, total || null) : null
   const displayPage = focusPage ?? page
+
+  useEffect(() => {
+    localStorage.setItem(PDF_VIEW_MODE_KEY, continuous ? 'on' : 'off')
+  }, [continuous])
 
   // 打开文档
   useEffect(() => {
@@ -132,7 +140,7 @@ export function PdfReader(props: Props) {
 
   // 渲染当前页：画布 + 可选中文本层（没有文本层就没法用真实选区划线）
   useEffect(() => {
-    if (!doc) return
+    if (!doc || continuous) return
     let cancelled = false
     const run = async () => {
       // 同一张 canvas 不能同时跑两个 render 任务：先把上一轮彻底收尾，否则新任务会直接被拒
@@ -207,7 +215,7 @@ export function PdfReader(props: Props) {
     return () => {
       cancelled = true
     }
-  }, [doc, displayPage, zoom, stageWidth])
+  }, [continuous, doc, displayPage, zoom, stageWidth])
 
   // 进度回报
   useEffect(() => {
@@ -217,6 +225,7 @@ export function PdfReader(props: Props) {
 
   // 选区 → 划线入口。只在选中的文字落在文本层里时才认，避免把工具栏文字也划了。
   useEffect(() => {
+    if (continuous) return
     const stage = stageRef.current
     if (!stage) return
     const handle = () => {
@@ -256,13 +265,15 @@ export function PdfReader(props: Props) {
       stage.removeEventListener('mouseup', handle)
       stage.removeEventListener('touchend', handle)
     }
-  }, [props, displayPage])
+  }, [continuous, props, displayPage])
 
   // 翻页即接管页码：把外部 focus 的 token 记账为「已处理」，之后由本地 page 主导。
   const goTo = useCallback(
     (next: number) => {
       setSeenFocus(focus?.token ?? 0)
-      setPage(clampPage(next, total || null))
+      const target = clampPage(next, total || null)
+      setPage(target)
+      setScrollRequest({ page: target, token: Date.now() })
     },
     [focus, total],
   )
@@ -270,6 +281,11 @@ export function PdfReader(props: Props) {
   const changeZoom = useCallback((next: number) => {
     setZoom((current) => clampZoom(Number((current + next).toFixed(2))))
   }, [])
+
+  const handleContinuousPage = useCallback((next: number) => {
+    setSeenFocus(focus?.token ?? 0)
+    setPage(next)
+  }, [focus?.token])
 
   const pageHighlights = highlights.filter(
     (highlight) => highlight.locatorType === 'pdf_page' && highlight.page === displayPage,
@@ -301,6 +317,20 @@ export function PdfReader(props: Props) {
           <span>/ {total || '—'}</span>
           <button onClick={() => goTo(displayPage + 1)} disabled={total === 0 || displayPage >= total} title="下一页">›</button>
         </div>
+        <button
+          className={`ws-chip book-reader__continuous-toggle ${continuous ? 'is-on' : ''}`}
+          onClick={() => {
+            setContinuous((enabled) => {
+              const next = !enabled
+              if (next) setScrollRequest({ page: displayPage, token: Date.now() })
+              return next
+            })
+          }}
+          aria-pressed={continuous}
+          title="实验功能：只渲染当前页及相邻页面"
+        >
+          {continuous ? '连续阅读（实验）' : '单页阅读'}
+        </button>
         <div className="book-reader__zoom">
           <button onClick={() => changeZoom(-ZOOM_STEP)} disabled={zoom <= ZOOM_MIN} title="缩小">−</button>
           <button className="book-reader__zoom-value" onClick={() => setZoom(1)} title="重置为 100%">
@@ -330,9 +360,22 @@ export function PdfReader(props: Props) {
             ))}
           </nav>
         )}
-        <div className="book-reader__stage" ref={stageRef}>
+        <div className={`book-reader__stage ${continuous ? 'is-continuous' : ''}`} ref={stageRef}>
           {error ? (
             <p className="book-reader__error">{error}</p>
+          ) : continuous && doc ? (
+            <PdfContinuousView
+              doc={doc}
+              currentPage={displayPage}
+              total={total}
+              zoom={zoom}
+              stageWidth={stageWidth}
+              highlights={highlights}
+              scrollRequest={focusPage && focus ? { page: focusPage, token: focus.token } : scrollRequest}
+              onCurrentPage={handleContinuousPage}
+              onSelect={props.onSelect}
+              onHighlightClick={props.onHighlightClick}
+            />
           ) : (
             <>
               {busy && <p className="book-reader__status">正在解析 PDF…</p>}

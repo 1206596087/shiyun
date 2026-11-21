@@ -261,3 +261,9 @@ M6 接入 `WebContentsView` 时需要在主进程创建独立的 webContents，�
 桌面数据流为 `galaxy:* IPC → libraryService → db/galaxies.ts`。`GalaxyMembership` 只引用投影后的稳定知识节点 ID，同一笔记加入多个星系不会复制 `notes` 行。删除非默认星系只删除集合、布局和成员关系；失去全部归属的节点会回到默认星系。宇宙光带由 `aggregateIntergalacticConnections()` 聚合已有 `knowledge_links`，不生成随机业务关系。
 
 浏览器预览没有 SQLite，只会根据原型节点生成明确标注的临时星系；它不能编辑正式星系。星系拖动只在松手时写数据库。镜头进入保留动画，同时有 1.8 秒状态兜底，避免后台窗口或低帧设备因收不到“到达”帧而无法进入。
+
+# 0.3.0 PDF 连续阅读实验增量
+
+`PdfReader` 保留原单页渲染路径，并按用户显式开关懒挂 `PdfContinuousView`。连续视图为全书建立轻量页面占位，以便页码和滚动条可定位；`pdfRenderWindow()` 只允许当前页前后各 1 页挂载 `PdfPageSurface`。每个表面独立持有 canvas、透明文本层和高亮层，离开窗口时取消 PDF.js render task 并把 canvas 尺寸归零。
+
+页码按钮、目录与外部划线定位通过 `scrollRequest` 滚动到目标占位；滚动容器反向计算最近页面并回报既有 `onProgress`，因此数据库仍只保存 `page / zoom`，没有新增迁移。实验偏好只在渲染进程保存，首次使用仍进入原单页模式。

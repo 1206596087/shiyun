@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ZOOM_MAX, ZOOM_MIN, clampPage, clampZoom, sanitizeReadingState } from './reader'
+import { ZOOM_MAX, ZOOM_MIN, clampPage, clampZoom, pdfRenderWindow, sanitizeReadingState } from './reader'
 
 describe('clampZoom', () => {
   it('把越界值夹回合法区间', () => {
@@ -26,6 +26,19 @@ describe('clampPage', () => {
     expect(clampPage(37, null)).toBe(37)
     expect(clampPage(Number.NaN, null)).toBe(1)
     expect(clampPage(37, 0)).toBe(37)
+  })
+})
+
+describe('pdfRenderWindow', () => {
+  it('只返回当前页前后有限窗口', () => {
+    expect(pdfRenderWindow(50, 100)).toEqual([49, 50, 51])
+    expect(pdfRenderWindow(50, 100, 2)).toEqual([48, 49, 50, 51, 52])
+  })
+
+  it('在文档边界收窄并拒绝空文档', () => {
+    expect(pdfRenderWindow(1, 3)).toEqual([1, 2])
+    expect(pdfRenderWindow(3, 3)).toEqual([2, 3])
+    expect(pdfRenderWindow(1, 0)).toEqual([])
   })
 })
 

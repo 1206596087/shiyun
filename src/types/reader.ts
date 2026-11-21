@@ -46,6 +46,19 @@ export function clampPage(value: number, pageCount: number | null): number {
   return Math.min(upper, Math.max(1, Math.round(value)))
 }
 
+/**
+ * 连续阅读只渲染当前页附近的有限窗口。其余页面保留轻量占位，避免大文档
+ * 同时创建数百个 canvas、文本层和 PDFPageProxy 渲染任务。
+ */
+export function pdfRenderWindow(currentPage: number, pageCount: number, radius = 1): number[] {
+  if (!Number.isInteger(pageCount) || pageCount < 1) return []
+  const current = clampPage(currentPage, pageCount)
+  const safeRadius = Number.isFinite(radius) ? Math.max(0, Math.floor(radius)) : 1
+  const start = Math.max(1, current - safeRadius)
+  const end = Math.min(pageCount, current + safeRadius)
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+}
+
 export function sanitizeReadingState(bookId: string, saved: unknown): ReadingState {
   const empty: ReadingState = { bookId, page: null, cfi: null, zoom: 1, scrollRatio: null, updatedAt: null }
   if (!saved || typeof saved !== 'object') return empty
