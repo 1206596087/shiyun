@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog, type OpenDialogOptions } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
+import { join, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ImportReport, LibraryNodeKind, LibraryTree } from '../../src/types/library.ts'
+import type { BookSource, ReadingState, SaveReadingStatePayload } from '../../src/types/reader.ts'
 import { createBackup, listBackups, shouldAutoBackup } from './db/backup.ts'
 import { openDatabase } from './db/connection.ts'
 import { importBookFromPath } from './db/importBook.ts'
@@ -9,11 +11,14 @@ import {
   createFolder,
   deleteBook,
   deleteFolder,
+  findBookSource,
   listTree,
   moveNode,
   renameNode,
   restoreBook,
+  updateBookMeta,
 } from './db/library.ts'
+import { getReadingState, saveReadingState } from './db/reading.ts'
 import { pendingVersions, runMigrations } from './db/migrate.ts'
 import { resolveDataPaths, type DataPaths } from './db/paths.ts'
 import { importPrototypeGraph, prototypeImportState } from './db/prototypeImport.ts'
@@ -167,4 +172,64 @@ export function libraryMeta(): {
     lastBackupAt: backups[0]?.name ?? null,
     prototypeImportedAt: prototypeImportState(connection).importedAt,
   }
+}
+
+/**
+ * 阅读一本书所需的一切：自定义协议地址 + 上次读到的位置。
+ *
+ * 文件缺失（例如原型迁移进来的书本来就没有源文件）时照样返回 source，让渲染层能显示
+ * 「这本书没有可读的源文件」，而不是抛一个用户看不懂的 IPC 错误。
+ */
+export function bookSource(bookId: string): BookSource | null {
+  const { db: connection, paths: resolved } = requireLibrary()
+  const row = findBookSource(connection, bookId)
+  if (!row) return null
+  const state = getReadingState(connection, bookId)
+  const absolute = row.filePath ? join(resolved.root, row.filePath) : null
+  const readable = absolute ? existsSync(absolute) : false
+  updateBookMeta(connection, bookId, { lastOpenedAt: new Date().toISOString() })
+  return {
+    bookId: row.id,
+    title: row.title,
+    format: row.format,
+    // URL 必须带文件名：EPUB.js 会用这个地址做相对解析基准，只给 `.../<id>` 会把 id 当文件名丢掉。
+    url: readable ? `shiyun-book://book/${encodeURIComponent(row.id)}/source.${row.format}` : '',
+    pageCount: row.pageCount,
+    state,
+  }
+}
+
+/** 自定义协议处理器用：把 bookId 解析成本机绝对路径，并做目录逃逸检查。 */
+export function resolveBookFile(bookId: string): { filePath: string; format: 'pdf' | 'epub' } | null {
+  const { db: connection, paths: resolved } = requireLibrary()
+  const row = findBookSource(connection, bookId)
+  if (!row || !row.filePath) return null
+  const absolute = resolve(resolved.root, row.filePath)
+  const booksRoot = resolve(resolved.booksDir)
+  if (absolute !== booksRoot && !absolute.startsWith(`${booksRoot}${sep}`)) return null
+  if (!existsSync(absolute)) return null
+  return { filePath: absolute, format: row.format }
+}
+
+export function readState(bookId: string): ReadingState {
+  const { db: connection } = requireLibrary()
+  return getReadingState(connection, bookId)
+}
+
+export function writeReadingState(bookId: string, payload: SaveReadingStatePayload): ReadingState {
+  const { db: connection } = requireLibrary()
+  const saved = saveReadingState(connection, bookId, payload)
+  if (typeof payload.page === 'number') {
+    updateBookMeta(connection, bookId, { lastOpenedAt: new Date().toISOString() })
+  }
+  return saved
+}
+
+/** PDF 解析出总页数后回写，避免每次打开都重新解析。 */
+export function recordPageCount(bookId: string, pageCount: number): ReadingState {
+  const { db: connection } = requireLibrary()
+  if (Number.isFinite(pageCount) && pageCount > 0) {
+    updateBookMeta(connection, bookId, { pageCount: Math.round(pageCount) })
+  }
+  return getReadingState(connection, bookId)
 }

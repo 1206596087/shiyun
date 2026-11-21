@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { ImportReport, LibraryNodeKind, LibraryTree } from '../../src/types/library.ts'
+import type { BookSource, ReadingState, SaveReadingStatePayload } from '../../src/types/reader.ts'
 
 export interface LibraryMeta {
   dataDir: string
@@ -29,6 +30,11 @@ export interface ShiyunLibraryApi {
   importBook: (folderId: string | null) => Promise<ImportReport | null>
   importPrototype: (graph: unknown) => Promise<PrototypeImportResult>
   getMeta: () => Promise<LibraryMeta>
+  /** 阅读器：拿到自定义协议地址与上次进度；没有可读源文件时 url 为空字符串。 */
+  bookSource: (bookId: string) => Promise<BookSource | null>
+  getReadingState: (bookId: string) => Promise<ReadingState>
+  saveReadingState: (bookId: string, patch: SaveReadingStatePayload) => Promise<ReadingState>
+  setPageCount: (bookId: string, pageCount: number) => Promise<ReadingState>
 }
 
 export interface ShiyunDesktopApi {
@@ -48,6 +54,10 @@ const library: ShiyunLibraryApi = {
   importBook: (folderId) => ipcRenderer.invoke('library:importBook', { folderId }),
   importPrototype: (graph) => ipcRenderer.invoke('library:importPrototype', graph),
   getMeta: () => ipcRenderer.invoke('library:getMeta'),
+  bookSource: (bookId) => ipcRenderer.invoke('library:bookSource', { bookId }),
+  getReadingState: (bookId) => ipcRenderer.invoke('reading:getState', { bookId }),
+  saveReadingState: (bookId, patch) => ipcRenderer.invoke('reading:saveState', { bookId, ...patch }),
+  setPageCount: (bookId, pageCount) => ipcRenderer.invoke('reading:setPageCount', { bookId, pageCount }),
 }
 
 const desktopApi: ShiyunDesktopApi = {

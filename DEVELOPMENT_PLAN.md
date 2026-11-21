@@ -9,10 +9,10 @@
 | 里程碑 | 目标 | 状态 |
 | --- | --- | --- |
 | M0 | 接管现有银河原型、验证基线、建立可回退标签 | ✅ 完成 |
-| M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架与状态持久化 | ✅ 完成（桌面窗口未在实机验证，见「已知风险」） |
-| M2 | SQLite 书库 + 真实文件夹 + 导入 PDF/EPUB | ⏳ 下一步 |
-| M3 | PDF.js / EPUB.js 真实阅读器 | 未开始 |
-| M4 | 划线、笔记、多对多关联 | 未开始 |
+| M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架与状态持久化 | ✅ 完成（桌面窗口已实机验证） |
+| M2 | SQLite 书库 + 真实文件夹 + 导入 PDF/EPUB | ✅ 完成（桌面实机验证） |
+| M3 | PDF.js / EPUB.js 真实阅读器 | ✅ 完成（桌面实机验证） |
+| M4 | 划线、笔记、多对多关联 | ⏳ 下一步 |
 | M5 | 真实知识数据生成星图（GraphDataAdapter） | 未开始 |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 未开始 |
 | M7 | 打磨、Windows 打包与发布 | 未开始 |
@@ -71,14 +71,24 @@
 - 导入还没做撤销/回收站界面；回收站数据在 `books.deleted_at`，只有 `restoreBook` 接口。
 - 书库目录仍是 `%APPDATA%\shiyun`（Electron 默认 userData），未做自定义位置设置。
 
-## M3 · PDF / EPUB 阅读器（下一步）
+## M3 · PDF / EPUB 阅读器（完成）
 
-- [ ] `pdfjs-dist` 渲染真实页面（虚拟滚动、缩放、翻页、目录、文本层）。
-- [ ] `epubjs` 渲染 EPUB（CFI 定位、目录、分页/滚动、主题）。
-- [ ] 阅读状态写回 `reading_states`，重启后恢复到同一位置。
-- [ ] 书籍内容与右侧研究栏共用中栏标签体系，不新开窗口。
+- [x] `pdfjs-dist` 渲染真实页面：按容器宽度「适合宽度 × 缩放」渲染当前页 canvas，支持翻页、页码输入、缩放 50%–300%、目录（`getOutline` → `getPageIndex` 跳页）。
+- [x] `epubjs` 渲染 EPUB：CFI 定位、目录（`loaded.navigation`）、左右方向键翻页、字号 70%–220% 缩放、`relocated` 回报当前章节。
+- [x] 阅读状态写回 `reading_states`（PDF 存 `page`，EPUB 存 `cfi`，共用一个 `zoom`），去抖 700ms 保存、卸载前 flush；重开书恢复到同一页/同一 CFI。
+- [x] 书籍内容与右侧研究栏共用中栏标签体系，不新开窗口：真实书籍在 `.reader-body.is-reader` 里铺满中栏。
+- [x] 主进程自定义协议 `shiyun-book://book/<id>/source.<ext>`：渲染层拿不到绝对路径，支持 `Range`（206）以便 PDF.js 分块读取，越权路径与目录穿越一律 404。
+- [x] 测试：`src/types/reader.test.ts`（clampZoom / clampPage / sanitizeReadingState 7 个用例）、`electron/main/db/reading.test.ts`（默认态、写入回读、部分字段合并、单行约束 4 个用例）。
+- [x] 实机复核：真实 PDF（3 页）渲染 canvas 935×1211、翻到第 2 页后 `reading_states.page=2`、重载后仍停在第 2 页；自建 EPUB 渲染正文、目录两项可跳第二章、字号 120% 生效并写入 `cfi`。
 
-## M4 · 划线、笔记与多对多
+**M3 已知限制（如实记录）**
+
+- PDF 每次只渲染当前页（没有虚拟滚动的连续滚动），大文档靠翻页；文本层与划到 M4 一起做。
+- 目录依赖 PDF 自身的 outline / EPUB 的 nav：样例 PDF 由 Edge 打印生成、没有书签，因此「目录」按钮是禁用态，这是真实状态而不是故障。
+- EPUB 的章节内相对资源（图片/字体）依赖 EPUB.js 写入的 `<base>`；为此 CSP 的 `base-uri` 从 `'none'` 放宽到 `'self' file: blob:`（iframe 已禁脚本）。
+- 主题、双栏排版、滚动模式（`flow: 'scrolled'`）尚未提供；阅读进度里的 `scroll_ratio` 字段先占位。
+
+## M4 · 划线、笔记与多对多（下一步）
 
 - [ ] PDF 文本层与 EPUB CFI 划线，写入 `highlights`（含 `quote / prefix / suffix`，页/CFI 必填）。
 - [ ] 选中文字浮动工具栏：划线 / 写笔记 / 关联节点。
@@ -113,7 +123,7 @@
 | 编号 | 场景 | 当前状态 |
 | --- | --- | --- |
 | A | 银河点「进入书房」→ 书房；书房点「返回银河」→ 银河，相机与选中状态不丢 | ✅ M1 已实现 |
-| B | 导入 PDF、划一条线、重启后划线仍在原位 | 🟡 导入与持久化已通（M2），划线定位需 M3 阅读器 + M4，重启后仍在的数据是书籍/文件夹/原型划线 |
+| B | 导入 PDF、划一条线、重启后划线仍在原位 | 🟡 导入与持久化已通（M2）、真实 PDF 渲染与阅读进度回写已通（M3），划线本身待 M4 |
 | C | 一条划线关联两篇笔记，两篇笔记都能看到对方 | ⛔ 需 M4 |
 | D | 银河中某节点双击跳回该书的原文位置 | ⛔ 需 M5（书房→银河方向已通） |
 | E | 右侧研究栏开关时，中栏自动扩展、阅读排版不跳版 | ✅ M1 已实现（`.is-research-hidden` 网格重排） |

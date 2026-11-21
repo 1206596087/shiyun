@@ -28,6 +28,7 @@ interface BookRow {
   title: string
   author: string | null
   format: BookFormat
+  file_path?: string | null
   page_count: number | null
   file_size: number | null
   last_opened_at: string | null
@@ -306,4 +307,37 @@ export function nodeExists(db: DatabaseSync, id: string): LibraryTreeNode | unde
   if (folder) return { kind: 'folder', id: folder.id, name: folder.name, parentId: folder.parent_id, children: [] }
   const book = queryOne<BookRow>(db, 'SELECT * FROM books WHERE id = ? AND deleted_at IS NULL', id)
   return book ? toBook(book) : undefined
+}
+
+export interface BookSourceRow {
+  id: string
+  title: string
+  format: BookFormat
+  filePath: string | null
+  pageCount: number | null
+}
+
+/** 取一本书的源文件信息（阅读器与协议处理用）；已软删的书视作不存在。 */
+export function findBookSource(db: DatabaseSync, bookId: string): BookSourceRow | undefined {
+  const row = queryOne<BookRow>(db, 'SELECT * FROM books WHERE id = ? AND deleted_at IS NULL', bookId)
+  if (!row) return undefined
+  return { id: row.id, title: row.title, format: row.format, filePath: row.file_path ?? null, pageCount: row.page_count }
+}
+
+/** 阅读器解析出页数后回写，并记录最近打开时间。 */
+export function updateBookMeta(
+  db: DatabaseSync,
+  bookId: string,
+  patch: { pageCount?: number | null; lastOpenedAt?: string | null },
+): void {
+  const current = queryOne<BookRow>(db, 'SELECT * FROM books WHERE id = ?', bookId)
+  if (!current) return
+  execute(
+    db,
+    'UPDATE books SET page_count = ?, last_opened_at = ?, updated_at = ? WHERE id = ?',
+    patch.pageCount ?? current.page_count,
+    patch.lastOpenedAt ?? current.last_opened_at,
+    nowIso(),
+    bookId,
+  )
 }

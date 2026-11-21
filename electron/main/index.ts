@@ -1,9 +1,23 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { registerLibraryIpc } from './libraryIpc.ts'
-import { closeLibrary, initLibrary } from './libraryService.ts'
+import { closeLibrary, initLibrary, resolveBookFile } from './libraryService.ts'
 
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * 书籍文件通过自定义协议交给渲染进程，而不是让渲染层拿到绝对路径：
+ * 渲染层只知道 `shiyun-book://book/<id>`，越权路径一律 404。
+ */
+const BOOK_SCHEME = 'shiyun-book'
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: BOOK_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+])
 
 // 只在生产（file://）加载时注入 CSP。开发模式注入会挡住 Vite 的内联 HMR 客户端。
 function installContentSecurityPolicy() {
@@ -13,14 +27,70 @@ function installContentSecurityPolicy() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          // 允许 @import 的 Google Fonts（见 src/App.css）：离线时会静默回退到系统字体，
-          // M7 打包前应改为自托管字体，届时收紧到 'self'。
+          // `shiyun-book:` 是本地书籍协议（PDF.js 取文件、EPUB.js 取资源都要用到）；
+          // `blob:`/`data:` 给 EPUB 的 iframe 与图片。Google Fonts 是既有例外（ADR-009）。
           "default-src 'self'; script-src 'self'; " +
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-            "font-src 'self' data: https://fonts.gstatic.com; " +
-            "img-src 'self' data: blob:; connect-src 'self'; " +
-            "worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            "font-src 'self' data: blob: https://fonts.gstatic.com shiyun-book:; " +
+            "img-src 'self' data: blob: shiyun-book:; connect-src 'self' blob: data: shiyun-book:; " +
+            "frame-src 'self' blob: data: shiyun-book:; child-src 'self' blob: data: shiyun-book:; " +
+            // EPUB.js 会在没有脚本权限的 srcdoc iframe 里写 <base>（源文件所在目录），
+            // 因此 base-uri 必须放行 file:；iframe 已禁用脚本，放开基址不影响脚本执行面。
+            "worker-src 'self' blob:; object-src 'none'; base-uri 'self' file: blob:; frame-ancestors 'none'",
         ],
+      },
+    })
+  })
+}
+
+/** 书籍文件服务：支持 Range（PDF.js 会按需取片段），并按扩展名给 MIME。 */
+function registerBookProtocol() {
+  protocol.handle(BOOK_SCHEME, async (request) => {
+    const url = new URL(request.url)
+    // 形如 shiyun-book://book/<id>/source.<ext>：第一段是书籍 ID，其余段只允许指向该书的源文件。
+    const segments = url.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part))
+    const bookId = segments[0] ?? ''
+    const resolved = bookId ? resolveBookFile(bookId) : null
+    if (!resolved) return new Response('Book not found', { status: 404 })
+
+    const requested = segments.slice(1).join('/')
+    const fileName = `source.${resolved.format}`
+    if (requested && requested !== fileName) {
+      // EPUB 的容器内资源由 EPUB.js 在内存里解包，不会走这个协议；其余路径一律拒绝，避免目录穿越。
+      return new Response('Not found', { status: 404 })
+    }
+
+    const buffer = await readFile(resolved.filePath)
+    const mime = resolved.format === 'pdf' ? 'application/pdf' : 'application/epub+zip'
+    const total = buffer.byteLength
+    const range = request.headers.get('range')
+
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
+      if (match) {
+        const start = match[1] ? Number.parseInt(match[1], 10) : 0
+        const end = match[2] ? Number.parseInt(match[2], 10) : total - 1
+        if (Number.isFinite(start) && Number.isFinite(end) && start <= end && start < total) {
+          const slice = buffer.subarray(start, Math.min(end, total - 1) + 1)
+          return new Response(slice, {
+            status: 206,
+            headers: {
+              'Content-Type': mime,
+              'Content-Length': String(slice.byteLength),
+              'Content-Range': `bytes ${start}-${start + slice.byteLength - 1}/${total}`,
+              'Accept-Ranges': 'bytes',
+            },
+          })
+        }
+      }
+    }
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': mime,
+        'Content-Length': String(total),
+        'Accept-Ranges': 'bytes',
       },
     })
   })
@@ -100,6 +170,7 @@ app.whenReady().then(() => {
 
   registerIpc()
   installContentSecurityPolicy()
+  registerBookProtocol()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -4,6 +4,30 @@
 
 ---
 
+## ADR-013 · PDF.js 5 + EPUB.js 0.3 作为阅读引擎，PDF 单页画布渲染
+
+**背景**：M3 要在中栏里显示真实书页，需要能解析 PDF 与 EPUB 的引擎，并且必须离线可用、许可证允许分发、在 Electron 渲染进程里能跑。
+
+**决策**：PDF 用 `pdfjs-dist@5`（Apache-2.0），把当前页渲染到 canvas：容器宽度经 `ResizeObserver` 量出后按「适合宽度 × 用户缩放」计算尺寸，`devicePixelRatio` 用 `transform: [dpr,0,0,dpr,0,0]` 校正，保证高分屏不糊；EPUB 用 `epubjs@0.3`（BSD-2-Clause），`flow: 'paginated'` 分页渲染，字号缩放走 `rendition.themes.fontSize()`。两者都由渲染进程直接跑，不需要主进程解析文件。
+
+**理由**：PDF.js 是唯一成熟的 PDF 渲染方案（Chrome 自己也是同源代码），EPUB.js 是 EPUB 3 分页/CFI 定位的事实标准；两者都是纯 JS、无原生依赖，打包体积换来的能力（真实书页、CFI、目录）正是这个产品的核心。PDF 选单页画布而非连续滚动，是因为个人书房的中栏固定宽度、单页更适合「专心读一页」的产品定位，且实现与状态（`page` + `zoom`）都更简单。
+
+**代价**：PDF 没有虚拟滚动的连续滚动，长文档要翻页；EPUB.js 会把章节放进 srcdoc iframe，因此要为它放宽 CSP 的 `base-uri`（见 ADR-012）与 `frame-src`。渲染包体因此增加到约 4.7 MB（含 worker 1.2 MB）。**重新评估**：M7 打包时若体积成为问题，可把 worker 与 cmaps 走外部资源；连续滚动如果用户需要再加 `scroll` 模式。
+
+---
+
+## ADR-012 · 书籍通过自定义协议 `shiyun-book://` 提供，URL 必须带文件名
+
+**背景**：PDF.js 与 EPUB.js 都需要一个 URL 去 fetch 文件。直接把绝对路径交给渲染进程会破坏「渲染进程不碰文件系统」的边界，并且 `file://` 在 CSP 与沙箱下也不合适。
+
+**决策**：主进程 `protocol.registerSchemesAsPrivileged` 注册 `shiyun-book`（standard / secure / supportFetchAPI / stream / corsEnabled），`protocol.handle` 里读取磁盘文件并支持 `Range` → `206`。书籍 URL 形态固定为 `shiyun-book://book/<id>/source.<ext>`，协议处理器按 `/` 切段校验：第一段是书籍 ID，其余段必须等于 `source.<format>`，否则 404。同时把 CSP 的 `base-uri 'none'` 放宽为 `base-uri 'self' file: blob:`。
+
+**理由**：URL 里带文件名不是洁癖，而是 EPUB.js 的硬要求——它按文档的相对路径解析章节资源，如果 URL 是 `shiyun-book://book/<id>`，`<id>` 会被当成文件名吃掉，后续 `META-INF/container.xml` 之类的请求会变成 `shiyun-book://book/META-INF/...` 而 404（这个坑在实机里真实踩过，界面表现为「正在解析 EPUB…」永远不结束）。`base-uri` 放宽是因为 EPUB.js 往禁脚本的 srcdoc iframe 里写 `<base>` 以解析章节内的相对图片/字体；iframe 已 `sandbox="allow-same-origin"` 且禁脚本，放开基址不扩大脚本执行面。
+
+**代价**：协议处理器成了文件读取的唯一入口，必须持续审它（目录穿越、越权 ID、软删书籍都要 404）。**重新评估**：M6 引入 `WebContentsView` 后，若研究栏也需要读本地资源，再评估是否复用同一协议与其权限边界。
+
+---
+
 ## ADR-011 · 书库能力在浏览器模式下降级为内存演示库
 
 **背景**：M2 的书库全在主进程（`node:sqlite` + `fs`）。但日常界面迭代用 `npm run dev:web`（不需要 Electron 二进制，也方便无头截图核对），那里没有 `window.shiyunDesktop`。
@@ -26,7 +50,9 @@
 
 **代价**：`node:sqlite` 仍标注为实验性 API（Node 24 下无需 flag，但升级 Node 时要注意签名变化）；没有 better-sqlite3 的 `pragma()` 便捷方法与自定义函数注册能力（本项目用不到）。**重新评估**：升级到 Electron 50+ 时复核 API 稳定性；若需要全文检索（FTS5）再检查编译选项是否可用。
 
+---
 
+## ADR-009 · 沙箱 preload 打包为 CommonJS，生产注入 CSP
 
 **背景**：M1 提交后在本机装好 Electron 45.4.1 实机验证，发现 `sandbox: true` 下 preload 被打成 ESM（`out/preload/index.mjs`），Electron 报 `SyntaxError: Cannot use import statement outside a module`，`window.shiyunDesktop` 为 `undefined`——即「外部浏览器打开」在真实桌面里是坏的，而浏览器模式下完全看不出来。同时控制台报 `Insecure Content-Security-Policy` 警告。
 
@@ -110,7 +136,7 @@
 
 ---
 
-## ADR-002 · M2 用 better-sqlite3，主进程独占数据库
+## ADR-002 · M2 用 better-sqlite3，主进程独占数据库（已被 ADR-010 替代）
 
 **背景**：需求要求本地优先、稳定 ID、迁移、备份，且删除书籍不得误删笔记。
 

@@ -1,4 +1,5 @@
 import type { ImportReport, LibraryCounts, LibraryFolder, LibraryNodeKind, LibraryTreeNode, LibraryTree } from '../types/library'
+import type { BookSource, ReadingState, SaveReadingStatePayload } from '../types/reader'
 import { cloneTree, createDemoTree } from './demoLibrary'
 
 export type LibraryMode = 'desktop' | 'demo'
@@ -21,6 +22,11 @@ export interface LibraryBridge {
   deleteBook: (id: string) => Promise<LibraryTree>
   importBook: (folderId: string | null) => Promise<ImportReport | null>
   getMeta: () => Promise<LibraryMeta | null>
+  /** 浏览器演示模式没有本地文件，返回 null；调用方据此显示「桌面版才能读正文」。 */
+  bookSource: (bookId: string) => Promise<BookSource | null>
+  getReadingState: (bookId: string) => Promise<ReadingState | null>
+  saveReadingState: (bookId: string, patch: SaveReadingStatePayload) => Promise<ReadingState | null>
+  setPageCount: (bookId: string, pageCount: number) => Promise<ReadingState | null>
 }
 
 /** 演示书库：只在内存里改，刷新页面即复原。用来在没有 Electron 的环境下验证交互。 */
@@ -125,6 +131,10 @@ function createDemoBridge(): LibraryBridge {
     },
     importBook: async () => null,
     getMeta: async () => null,
+    bookSource: async () => null,
+    getReadingState: async () => null,
+    saveReadingState: async () => null,
+    setPageCount: async () => null,
   }
 }
 
@@ -167,6 +177,10 @@ function createDesktopBridge(api: NonNullable<Window['shiyunDesktop']>['library'
     deleteBook: (id) => api.deleteBook(id),
     importBook: (folderId) => api.importBook(folderId),
     getMeta: () => api.getMeta(),
+    bookSource: (bookId) => api.bookSource(bookId),
+    getReadingState: (bookId) => api.getReadingState(bookId),
+    saveReadingState: (bookId, patch) => api.saveReadingState(bookId, patch),
+    setPageCount: (bookId, pageCount) => api.setPageCount(bookId, pageCount),
   }
 }
 

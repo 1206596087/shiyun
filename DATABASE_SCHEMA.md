@@ -1,6 +1,6 @@
 # 数据库设计（SQLite）
 
-> **状态：已实现（M2）。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`。已应用迁移禁止修改，结构调整必须新增版本。真实阅读产生的划线定位要等 M3/M4，在那之前 `highlights` 里的数据来自原型迁移。
+> **状态：已实现（M2），`reading_states` 自 M3 起被阅读器真实读写。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`，阅读进度见 `reading.ts`（PDF 写 `page`、EPUB 写 `cfi`，`zoom` 共用，去抖 700ms 保存）。已应用迁移禁止修改，结构调整必须新增版本。真实阅读产生的划线要等 M4，在那之前 `highlights` 里的数据来自原型迁移。
 
 ## 1. 存储位置与文件
 

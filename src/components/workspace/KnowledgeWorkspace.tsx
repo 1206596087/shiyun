@@ -226,6 +226,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
           activeTabId={state.activeTabId}
           noteDraft={state.noteDraft}
           rightVisible={state.rightVisible}
+          bridge={bridge}
           onActivate={(activeTabId) => update({ activeTabId })}
           onClose={closeTab}
           onOpenNote={() => openTab(NOTE_TAB)}

@@ -2,16 +2,21 @@ import { ipcMain } from 'electron'
 import type { LibraryNodeKind } from '../../src/types/library.ts'
 import {
   addFolder,
+  bookSource,
   importBooks,
   importPrototype,
   libraryMeta,
   libraryTree,
   moveLibraryNode,
+  readState,
+  recordPageCount,
   removeBook,
   removeFolder,
   renameLibraryNode,
   undeleteBook,
+  writeReadingState,
 } from './libraryService.ts'
+import type { SaveReadingStatePayload } from '../../src/types/reader.ts'
 
 type TrustCheck = (url: string) => void
 
@@ -96,5 +101,35 @@ export function registerLibraryIpc(assertTrusted: TrustCheck) {
   ipcMain.handle('library:getMeta', (event) => {
     assertTrusted(event.senderFrame?.url ?? '')
     return libraryMeta()
+  })
+
+  ipcMain.handle('library:bookSource', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    return bookSource(asString(asRecord(payload), 'bookId'))
+  })
+
+  ipcMain.handle('reading:getState', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    return readState(asString(asRecord(payload), 'bookId'))
+  })
+
+  ipcMain.handle('reading:saveState', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    const record = asRecord(payload)
+    const bookId = asString(record, 'bookId')
+    const patch: SaveReadingStatePayload = {}
+    if (typeof record.page === 'number' || record.page === null) patch.page = record.page
+    if (typeof record.cfi === 'string' || record.cfi === null) patch.cfi = record.cfi
+    if (typeof record.zoom === 'number') patch.zoom = record.zoom
+    if (typeof record.scrollRatio === 'number' || record.scrollRatio === null) patch.scrollRatio = record.scrollRatio
+    return writeReadingState(bookId, patch)
+  })
+
+  ipcMain.handle('reading:setPageCount', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    const record = asRecord(payload)
+    const pageCount = record.pageCount
+    if (typeof pageCount !== 'number') throw new TypeError('参数 pageCount 必须是数字')
+    return recordPageCount(asString(record, 'bookId'), pageCount)
   })
 }

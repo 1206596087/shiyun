@@ -48,7 +48,7 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 4. 维护状态（最近发布、issue 活跃度）？
 5. 不装它的替代方案是什么？
 
-已预定的选型：`pdfjs-dist` + `epubjs`（M3）、`@tiptap/react`（M4）。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力。
+已预定的选型：`@tiptap/react`（M4）。已安装：`pdfjs-dist@5.7.284`（PDF）、`epubjs@0.3.93`（EPUB），见 ADR-013。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力。
 
 ## 5. 测试要求
 
@@ -86,6 +86,8 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
   注意 `--screenshot` 路径不要带空格（会被拆成多个参数并报 "Multiple targets are not supported in headless mode"）。
 - **桌面端数据目录**：`%APPDATA%\shiyun\`（`shiyun.db`、`shiyun.db-wal`、`books\`、`backups\`）。跑真机验证前先 `Get-Process electron | Stop-Process -Force`，同一 userData 起两个实例会 `bind() 失败` / `Unable to create cache (0x5)`。
 - **桌面端自动化验证**：`electron.exe . --remote-debugging-port=<port>`，再用 Node 24 内置 `fetch` + `WebSocket` 写个临时 CDP 客户端（`Runtime.evaluate`、`Page.reload`），不需要 puppeteer 之类的新依赖。
+- **PDF.js 运行资产**：`public/pdfjs/`（`cmaps` 169 个 + `standard_fonts` 16 个）由 `npm run assets` 从 `pdfjs-dist` 复制，已挂在 `predev` / `predev:web` / `prebuild` / `prebuild:web` 上；`public/pdfjs` 不进版本库。缺了这组文件，中文 PDF 的字形会退化成方块。
+- **书籍文件访问**：渲染进程只有 `shiyun-book://book/<id>/source.<ext>` 这种 URL，没有绝对路径。验证阅读器时可以在临时脚本里用 `node:sqlite` 直接往书库插一行 + 把样例文件放到 `books/<id>/`，验证完记得把测试数据删干净。
 
 ## 7.1 两条血泪规则（务必遵守）
 
@@ -101,4 +103,4 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 
 ## 8. 下一步建议
 
-M3 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：引入 `pdfjs-dist` 与 `epubjs`，先做「打开真实书籍 → 渲染第一页」，再补目录、翻页、缩放与阅读进度（`reading_states` 表已经在 M2 建好）；划线（M4）要等 M3 的文本层与定位就绪再动。别先做界面美化——书库与骨架都已立好，缺的是真正的书页。
+M4 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：M3 的阅读器已经能显示真实书页并记录页码/CFI（`reading_states.page` 与 `reading_states.cfi`），所以划线要做的第一步是**在 PDF 画布上叠文本层、在 EPUB iframe 内取 CFI**，然后把 `highlights`（`locator_type` + `quote/prefix/suffix`）写进去。顺序建议：先有"能选字的文本层"，再能保存一条划线并在重新打开时按页/CFI 复原，最后才是 TipTap 笔记与多对多关系。禁止先做笔记界面——没有真实划线的笔记卡就是假功能。

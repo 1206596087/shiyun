@@ -13,6 +13,9 @@ dist-ssr
 out
 *.local
 
+# PDF.js 运行时资产（由 scripts/copy-pdfjs-assets.mjs 从 node_modules 生成）
+public/pdfjs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

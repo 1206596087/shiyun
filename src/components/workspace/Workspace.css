@@ -250,6 +250,75 @@
 .reader-note-card__link:hover { color: var(--ws-ink); }
 .reader-page__foot { margin: 26px 0 0; padding-top: 14px; border-top: 1px solid var(--ws-line); color: var(--ws-faint); font-size: 10.5px; text-align: center; }
 
+.reader-notice__title { margin: 0 0 14px; color: #34322c; font-size: 17px; font-weight: 600; text-align: center; }
+
+/* ── 真实书籍阅读器（PDF.js / EPUB.js）─────────────────────────── */
+.reader-body.is-reader { overflow: hidden; display: flex; }
+.book-reader { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+
+.book-reader__bar {
+  display: flex; align-items: center; gap: 10px; height: 44px; flex: none;
+  padding: 0 14px; border-bottom: 1px solid var(--ws-line); background: #fffdf9;
+}
+.book-reader__pages { display: flex; align-items: center; gap: 4px; color: var(--ws-muted); font-size: 11.5px; }
+.book-reader__pages button {
+  width: 24px; height: 24px; display: grid; place-items: center; border-radius: 5px;
+  color: var(--ws-ink-2); font-size: 14px; line-height: 1;
+}
+.book-reader__pages button:hover:not(:disabled) { background: var(--ws-hover); }
+.book-reader__pages button:disabled { color: #cbc6ba; cursor: not-allowed; }
+.book-reader__pages input {
+  width: 40px; height: 24px; padding: 0 4px; border: 1px solid var(--ws-line-strong); border-radius: 5px;
+  background: #fff; color: var(--ws-ink); font-family: inherit; font-size: 11.5px; text-align: center; outline: 0;
+}
+.book-reader__pages input:focus { border-color: var(--ws-gold); }
+.book-reader__label {
+  max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ws-muted); font-size: 11.5px;
+}
+.book-reader__zoom { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.book-reader__zoom button {
+  height: 24px; min-width: 24px; padding: 0 6px; display: grid; place-items: center; border-radius: 5px;
+  color: var(--ws-ink-2); font-size: 12px;
+}
+.book-reader__zoom button:hover:not(:disabled) { background: var(--ws-hover); }
+.book-reader__zoom button:disabled { color: #cbc6ba; cursor: not-allowed; }
+.book-reader__zoom-value { min-width: 46px !important; color: var(--ws-muted) !important; font-variant-numeric: tabular-nums; }
+
+.ws-chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px;
+  border: 1px solid transparent; border-radius: 6px; color: var(--ws-muted); font-size: 12px;
+}
+.ws-chip:hover:not(:disabled) { background: var(--ws-hover); color: var(--ws-ink-2); }
+.ws-chip.is-on { border-color: var(--ws-line-strong); background: #faf7f0; color: var(--ws-ink); }
+.ws-chip:disabled { color: #c3beb2; cursor: not-allowed; }
+
+.book-reader__main { flex: 1; min-height: 0; display: flex; }
+.book-reader__toc {
+  width: 208px; flex: none; display: flex; flex-direction: column; gap: 1px;
+  padding: 12px 8px; overflow-y: auto; border-right: 1px solid var(--ws-line); background: #fffdf9;
+}
+.book-reader__toc-title { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 0 4px; color: var(--ws-faint); font-size: 10.5px; letter-spacing: .1em; }
+.book-reader__toc-item {
+  min-height: 26px; padding: 4px 8px; border-radius: 5px; color: var(--ws-ink-2);
+  font-size: 12px; line-height: 1.5; text-align: left;
+}
+.book-reader__toc-item:hover:not(:disabled) { background: var(--ws-hover); }
+.book-reader__toc-item:disabled { color: #b8b3a8; cursor: default; }
+
+.book-reader__stage {
+  flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center;
+  padding: 22px; overflow: auto; background: #f6f3eb;
+}
+.book-reader__stage--epub { display: block; padding: 0; background: #f6f3eb; }
+.book-reader__canvas { display: block; border-radius: 2px; background: #fff; box-shadow: 0 2px 14px rgba(60, 52, 36, .13); }
+.book-reader__epub { width: 100%; height: 100%; }
+.book-reader__status, .book-reader__error {
+  margin: 0; padding: 18px; color: var(--ws-muted); font-size: 12.5px; text-align: center;
+}
+.book-reader__status--page { padding: 60px 24px; }
+.book-reader__error { color: #a4552f; }
+
 .note-page { width: min(700px, 100%); margin: 0 auto; padding: 32px 42px 44px; display: flex; flex-direction: column; min-height: 100%; }
 .note-page__kind { margin: 0; color: var(--ws-faint); font-size: 11px; letter-spacing: .1em; }
 .note-page h1 { margin: 8px 0 6px; font-size: 21px; font-weight: 600; letter-spacing: .01em; }

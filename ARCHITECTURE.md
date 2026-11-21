@@ -83,15 +83,38 @@ IPC 通道与职责：
 
 所有写操作都返回**新的完整树**，渲染进程不做本地增量合并——书架规模小（个人书库），这样能保证界面与数据库不漂移。
 
+## 3.2 阅读器数据流（M3）
+
+```text
+渲染进程                      preload（contextBridge）        主进程
+ReadingDesk → ReaderPane  window.shiyunDesktop.library   libraryIpc.ts（校验参数）
+        │                         │                             │
+        ├─ bookSource(bookId) ────┴── ipcRenderer.invoke ──────> libraryService.bookSource()
+        │                                                          ├ db/library.findBookSource
+        │                                                          └ 拼 shiyun-book:// URL
+        ├─ <PdfReader url>  ── fetch(Range) ──> protocol.handle('shiyun-book') ─> 磁盘文件（206 分块）
+        ├─ <EpubReader url> ── 相对资源 ──────> 同上（只允许 source.<ext>，其余 404）
+        └─ saveReadingState（去抖 700ms + 卸载 flush） ──> reading_states
+```
+
+要点：
+
+- 书籍文件永远不暴露绝对路径给渲染进程。协议 URL 形态为 `shiyun-book://book/<id>/source.<ext>`：**必须带文件名**，否则 EPUB.js 按相对路径解析时会把 `<id>` 当成文件名吃掉，导致 `META-INF/container.xml` 之类的请求打到 404。
+- `protocol.handle` 支持 `Range` → `206 Partial Content`，PDF.js 才能分块读取大文件；路径按 `/` 切段后逐段校验，任何越权段或 `..` 一律 404。
+- 阅读状态一个表两种定位：PDF 存 `page`，EPUB 存 `cfi`，`zoom` 共用；数据库层 `CHECK` 保证至少有一个定位存在（见 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)）。
+- `pdfjs-dist` 的 `cmaps` 与 `standard_fonts` 由 `scripts/copy-pdfjs-assets.mjs` 复制到 `public/pdfjs/`（`predev` / `prebuild` 自动执行），否则中文 PDF 的字形会退化成方块。
+
 ## 4. 书房结构
 
 ```text
 KnowledgeWorkspace          # 三栏布局 + 拖拽 + UI 状态持久化 + 书库加载/写操作
 ├─ WorkspaceHeader          # 品牌、全局搜索（读 graph）、布局设置、返回银河
 ├─ FileSidebar              # 真实文件夹树（新建/重命名/拖拽/删除）+ 计数 + 入口
-├─ ReadingDesk              # 标签栏 + 页面容器（demo book / imported book / note / empty）
-│   ├─ BookPage             # 内置演示书的排版样例（M3 换成真实渲染）
-│   ├─ ImportedBookPage     # 真实书籍的「M3 接入」占位，不排假版面
+├─ ReadingDesk              # 标签栏 + 页面容器（demo book / reader / note / empty）
+│   ├─ BookPage             # 内置演示书的排版样例（演示数据，不是真实书页）
+│   ├─ ReaderPane           # 真实书籍：取源、进度回写、错误与缺失提示
+│   │   ├─ PdfReader        # PDF.js：适合宽度单页 canvas + 页码 + 缩放 + 目录
+│   │   └─ EpubReader       # EPUB.js：分页渲染 + CFI + 目录 + 字号 + 方向键
 │   └─ NotePage             # 标题 + 只读正文（M4 换 TipTap）
 └─ ResearchSidebar          # 研究提示卡 + 外部浏览器打开（M6 换 WebContentsView）
 ```

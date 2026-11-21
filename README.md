@@ -13,7 +13,11 @@
 
 ![桌面版真实书库](docs/screenshots/desktop-library.png)
 
-> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`，双击《数学之美》打开的正文仍是「M3 接入」占位页——不排假版面。
+![PDF 阅读器](docs/screenshots/reader-pdf.png)
+
+![EPUB 阅读器](docs/screenshots/reader-epub.png)
+
+> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）。
 
 ## 当前进度
 
@@ -22,8 +26,8 @@
 | M0 | 接管现有原型、基线验证、标签 `galaxy-baseline` | 完成 |
 | M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架 | 完成（桌面窗口已实机验证） |
 | M2 | SQLite 书库、真实文件夹树、导入 PDF/EPUB | 完成（桌面实机验证） |
-| M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放） | 下一步 |
-| M4 | 划线、笔记、多对多关联 | 未开始 |
+| M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放、阅读进度） | 完成（桌面实机验证） |
+| M4 | 划线、笔记、多对多关联 | 下一步 |
 | M5 | 真实知识库生成星图（GraphDataAdapter） | 未开始 |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 未开始 |
 | M7 | 打磨、Windows 打包、自动更新 | 未开始 |
@@ -89,6 +93,15 @@ npm run build:web   # 纯网页构建
 - 三栏可拖拽（左 196–360px、右 264–440px）、右栏可隐藏，隐藏时中栏自动占满；全部 UI 状态持久化到 `localStorage` 键 `shiyun-workspace-ui-v1`。
 - 深浅两个空间通过 `opacity / transform / visibility` 过渡共存，切到书房时银河暂停渲染。
 
+### 阅读器（M3）
+
+- PDF 用 `pdfjs-dist`：按中栏宽度「适合宽度 × 缩放」渲染当前页到 canvas（devicePixelRatio 已校正），支持翻页、页码输入、缩放 50%–300%、目录跳页（`getOutline` → `getPageIndex`）。
+- EPUB 用 `epubjs`：CFI 定位、分页排版、目录（`loaded.navigation`）、左右方向键翻页、字号 70%–220% 缩放，`relocated` 事件回报当前章节。
+- 书页由主进程的自定义协议 `shiyun-book://book/<id>/source.<ext>` 提供：渲染进程拿不到绝对路径，协议支持 `Range` 请求（206）供 PDF.js 分块读取，越权路径与目录穿越一律 404。
+- 阅读进度写回 `reading_states`（PDF 存 `page`，EPUB 存 `cfi`，共用 `zoom`），去抖 700ms 保存并在组件卸载前 flush；重开同一本书停在原页码/原位置。
+- 中文 PDF 需要 `cmaps`、部分 PDF 需要 `standard_fonts`：`npm run assets` 会把这两组文件从 `pdfjs-dist` 复制到 `public/pdfjs/`（已挂到 `predev` / `prebuild` 钩子上，`public/pdfjs` 不进版本库）。
+- 书库里有书但没有源文件（原型迁移进来的书目）时，阅读区明确写「只保留了书目记录，源文件需要重新导入」，不排假版面；没有书签的 PDF 其「目录」按钮是禁用态——这是真实状态。
+
 ### 本地书库（M2）
 
 - 主进程用 Node/Electron 内置 `node:sqlite`（Electron 45 的 Node 24 自带，无需原生模块编译，见 [ADR-010](./DECISIONS.md)）打开 `%APPDATA%\shiyun\shiyun.db`：WAL、`foreign_keys=ON`、每版本一个事务的迁移、迁移前备份、24 小时自动备份保留 14 份。
@@ -113,26 +126,29 @@ electron/
 ├─ main/index.ts        # 窗口、IPC、导航与安全策略
 ├─ main/libraryService.ts # 书库生命周期（打开/迁移/备份）与业务操作
 ├─ main/libraryIpc.ts   # library:* 通道注册与参数校验
-├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移
-└─ preload/index.ts     # contextBridge 暴露的最小桌面 API
+├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态
+├─ preload/index.ts     # contextBridge 暴露的最小桌面 API
+scripts/
+└─ copy-pdfjs-assets.mjs # 把 pdfjs 的 cmaps / standard_fonts 复制到 public/pdfjs
 src/
 ├─ components/
 │  ├─ galaxy/           # 银河装饰层：粒子、星核、背景、相机
 │  ├─ knowledge/        # 知识层：节点与关系渲染
 │  ├─ ui/               # 银河大厅的搜索、信息卡、调试面板、顶栏
-│  └─ workspace/        # 学习书房：头部、文件树、阅读区、研究栏、图标
+│  └─ workspace/        # 学习书房：头部、文件树、阅读区（PDF/EPUB/占位）、研究栏、图标
 ├─ data/                # 知识仓储、书库桥接（桌面 IPC / 浏览器演示）、原型迁移
-├─ types/               # 银河、知识、书房 UI、书库、Electron API 类型
+├─ types/               # 银河、知识、书房 UI、书库、阅读器、Electron API 类型
 └─ utils/               # 确定性随机数
 docs/screenshots/       # README 截图
 ```
 
 ## 已知限制
 
-- 书库已是真实 SQLite：目录、书籍、划线、笔记、关系、坐标都会落盘，重启后仍在。但**书籍正文还没渲染**——双击书库里的书只打开「M3 接入」占位页（M3）。
-- 划线创建、笔记编辑、关联操作按钮仍是禁用状态（M4）；`highlights` / `notes` 里的数据目前来自原型迁移，还没有真实阅读产生的划线。
+- 书库与阅读器都是真实的：目录、书籍、阅读进度（页码/CFI/缩放）都落盘并可恢复。但**划线还没法在真实书页上创建**——阅读区的「添加划线 / 写笔记 / 关联节点」仍是禁用态，等 M4。
+- `highlights` / `notes` 里的数据目前来自原型迁移，还没有真实阅读产生的划线。
+- PDF 每次只渲染当前一页（没有连续滚动），大文档靠翻页；EPUB 的主题、双栏、滚动模式未提供，`scroll_ratio` 字段先占位。
 - 右侧「网页搜索」不是内嵌浏览器；输入框禁用到 M6 接入 `WebContentsView` 为止。
-- 导入的书只做了哈希去重与文件复制，页数 / 章节数 / 封面要等 M3 解析；回收站只有数据层接口，还没有界面。
+- 回收站只有数据层接口（`restoreBook`），还没有界面；书库位置固定为 `%APPDATA%\shiyun`，未做自定义目录设置。
 - 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
 - 中文正文字体当前来自 Google Fonts CDN，离线时回退到系统字体；M7 打包前自托管并收紧 CSP。
 - 知识布局仍是确定性的银河簇布局，不运行全局力导向模拟。
