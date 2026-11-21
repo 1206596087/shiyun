@@ -3,7 +3,7 @@ import type { KnowledgeGraphData, KnowledgeNode, KnowledgeNodeType } from '../..
 import { IconMark, IconSearch, IconSliders, IconSparkle } from './icons'
 import { MaintenancePanel } from './MaintenancePanel'
 
-const TYPE_LABEL: Record<KnowledgeNodeType, string> = { book: '书籍', highlight: '划线', note: '笔记', topic: '主题' }
+const TYPE_LABEL: Record<KnowledgeNodeType, string> = { book: '书籍', highlight: '划线', note: '笔记', topic: '主题', clipping: '摘录' }
 
 interface Props {
   graph: KnowledgeGraphData

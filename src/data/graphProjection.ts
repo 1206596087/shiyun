@@ -50,6 +50,15 @@ export interface SourceHighlightNote {
   noteId: string
 }
 
+export interface SourceClipping {
+  id: string
+  quote: string
+  pageTitle: string
+  url: string
+  noteId: string | null
+  capturedAt: string
+}
+
 export interface SourceLink {
   id: string
   sourceKind: KnowledgeNodeType
@@ -76,6 +85,8 @@ export interface GraphSource {
   highlightNotes: SourceHighlightNote[]
   links: SourceLink[]
   layouts: SourceLayout[]
+  /** 网页摘录（阶段一）：只挂在笔记上，不属于任何一本书。 */
+  clippings?: SourceClipping[]
 }
 
 export interface ProjectionOptions {
@@ -101,6 +112,7 @@ const RADIUS: Record<KnowledgeNodeType, number> = {
   book: 9.6,
   highlight: 12.2,
   note: 10.9,
+  clipping: 11.6,
 }
 
 const HEIGHT: Record<KnowledgeNodeType, number> = {
@@ -108,6 +120,7 @@ const HEIGHT: Record<KnowledgeNodeType, number> = {
   book: 0.05,
   highlight: -0.4,
   note: 0.7,
+  clipping: -0.15,
 }
 
 export function topicNodeId(folderId: string | null): string {
@@ -130,12 +143,17 @@ export function noteNodeId(noteId: string): string {
   return `note:${noteId}`
 }
 
+export function clippingNodeId(clippingId: string): string {
+  return `clip:${clippingId}`
+}
+
 /** 从节点 id 反解节点种类（写 graph_layouts 与深链都要用）。 */
 export function nodeKindOf(nodeId: string): KnowledgeNodeType | null {
   if (nodeId.startsWith('topic:')) return 'topic'
   if (nodeId.startsWith('book:')) return 'book'
   if (nodeId.startsWith('hl:') || nodeId.startsWith('hlagg:')) return 'highlight'
   if (nodeId.startsWith('note:')) return 'note'
+  if (nodeId.startsWith('clip:')) return 'clipping'
   return null
 }
 
@@ -233,7 +251,8 @@ export function projectKnowledgeGraph(source: GraphSource, options: ProjectionOp
   })
 
   // —— 是否降级：先按「划线逐条展开」算一次，再看要不要聚合/隐藏笔记 ——
-  const rawNodeCount = topicIds.length + books.length + source.highlights.length + source.notes.length
+  const clippings = source.clippings ?? []
+  const rawNodeCount = topicIds.length + books.length + source.highlights.length + source.notes.length + clippings.length
   const shouldAggregate = rawNodeCount > maxNodes
   const highlightCountByBook = new Map<string, number>()
   if (shouldAggregate) {
@@ -335,6 +354,26 @@ export function projectKnowledgeGraph(source: GraphSource, options: ProjectionOp
     })
   }
 
+  // 网页摘录：不属于任何一本书，只可能在「已转成笔记」时与笔记相连。
+  // 笔记被隐藏时摘录仍然保留——它自己就是一份可读的原文。
+  clippings.forEach((clipping) => {
+    const quote = clipping.quote.trim()
+    const metadata: Record<string, string | number | boolean> = {
+      url: clipping.url,
+      pageTitle: clipping.pageTitle,
+    }
+    if (clipping.noteId) metadata.noteId = clipping.noteId
+    nodes.push({
+      id: clippingNodeId(clipping.id),
+      type: 'clipping',
+      title: truncate(quote, 22) || '（空摘录）',
+      content: quote,
+      metadata,
+      createdAt: clipping.capturedAt,
+      updatedAt: clipping.capturedAt,
+    })
+  })
+
   // —— 连线 ——
   const nodeIds = new Set(nodes.map((node) => node.id))
   const links: KnowledgeLink[] = []
@@ -371,12 +410,18 @@ export function projectKnowledgeGraph(source: GraphSource, options: ProjectionOp
       pushLink(`link:hl-note:${pair.highlightId}:${pair.noteId}`, target, noteNodeId(pair.noteId), 'annotates', '划线被笔记引用')
     })
     source.links.forEach((link) => {
-      const prefixOf = (kind: KnowledgeNodeType) => (kind === 'highlight' ? 'hl' : kind)
+      const prefixOf = (kind: KnowledgeNodeType) => (kind === 'highlight' ? 'hl' : kind === 'clipping' ? 'clip' : kind)
       const sourceId = `${prefixOf(link.sourceKind)}:${link.sourceId}`
       const targetId = `${prefixOf(link.targetKind)}:${link.targetId}`
       pushLink(`link:knowledge:${link.id}`, sourceId, targetId, link.relationType, link.description)
     })
   }
+
+  // 摘录 → 笔记：只在笔记真的在图上时才连（笔记被降级隐藏时不画半边线）。
+  clippings.forEach((clipping) => {
+    if (!clipping.noteId) return
+    pushLink(`link:clip-note:${clipping.id}`, clippingNodeId(clipping.id), noteNodeId(clipping.noteId), 'annotates', '摘录已整理成笔记')
+  })
 
   // —— 坐标 ——
   const saved = new Map(source.layouts.map((layout) => [layout.nodeId, layout]))
@@ -394,6 +439,16 @@ export function projectKnowledgeGraph(source: GraphSource, options: ProjectionOp
     if (node.type === 'highlight') {
       const bookId = node.metadata.bookId
       return typeof bookId === 'string' ? (clusterOfBook.get(bookId) ?? clusterCount - 1) : clusterCount - 1
+    }
+    if (node.type === 'clipping') {
+      // 摘录没有归属书：如果它已经变成笔记，就跟着那篇笔记所在的星团。
+      const noteId = node.metadata.noteId
+      if (typeof noteId === 'string') {
+        const highlightId = firstHighlightOfNote.get(noteId)
+        const highlight = highlightId ? highlightById.get(highlightId) : undefined
+        if (highlight) return clusterOfBook.get(highlight.bookId) ?? clusterCount - 1
+      }
+      return Math.floor(jitter(node.id, 'cluster') * clusterCount)
     }
     const highlightId = firstHighlightOfNote.get(entityIdOf(node.id))
     const highlight = highlightId ? highlightById.get(highlightId) : undefined

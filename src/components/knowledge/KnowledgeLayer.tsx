@@ -28,6 +28,8 @@ const NODE_STYLE: Record<KnowledgeNodeType, { color: string; emissive: string; s
   highlight: { color: '#ffd889', emissive: '#ff9f32', size: 0.19 },
   note: { color: '#e5c4ff', emissive: '#a467ff', size: 0.27 },
   topic: { color: '#7aa9ff', emissive: '#704cff', size: 0.48 },
+  // 网页摘录用青色：与「书（蓝）/划线（金）/笔记（紫）」都能区分开。
+  clipping: { color: '#8ff0d8', emissive: '#1fa88f', size: 0.22 },
 }
 
 function connectedSet(graph: KnowledgeGraphData, selectedId: string | null, depth: number) {

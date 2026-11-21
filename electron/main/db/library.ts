@@ -118,13 +118,14 @@ export function listTree(db: DatabaseSync, dataDir: string): LibraryTree {
 }
 
 export function countLibrary(db: DatabaseSync): LibraryCounts {
-  const row = queryOne<{ books: number; folders: number; highlights: number; notes: number; links: number }>(
+  const row = queryOne<{ books: number; folders: number; highlights: number; notes: number; clippings: number; links: number }>(
     db,
     `SELECT
        (SELECT COUNT(*) FROM books WHERE deleted_at IS NULL) AS books,
        (SELECT COUNT(*) FROM folders WHERE deleted_at IS NULL) AS folders,
        (SELECT COUNT(*) FROM highlights h JOIN books b ON b.id = h.book_id WHERE b.deleted_at IS NULL) AS highlights,
        (SELECT COUNT(*) FROM notes WHERE deleted_at IS NULL) AS notes,
+       (SELECT COUNT(*) FROM web_clippings WHERE deleted_at IS NULL) AS clippings,
        (SELECT COUNT(*) FROM knowledge_links) AS links`,
   )
   return {
@@ -132,6 +133,7 @@ export function countLibrary(db: DatabaseSync): LibraryCounts {
     folders: Number(row?.folders ?? 0),
     highlights: Number(row?.highlights ?? 0),
     notes: Number(row?.notes ?? 0),
+    clippings: Number(row?.clippings ?? 0),
     links: Number(row?.links ?? 0),
   }
 }

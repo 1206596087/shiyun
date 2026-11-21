@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IconBack, IconExternal, IconForward, IconGlobe, IconRefresh, IconSearch } from './icons'
 import { getResearchBridge } from '../../data/researchBridge'
+import { getClippingBridge } from '../../data/clippingBridge'
 import { displayUrl, toNavigableUrl } from '../../data/researchUrl'
-import { translationUrl, type ResearchRequest } from '../../data/selectionActions'
+import type { ResearchRequest } from '../../data/selectionActions'
+import { getTranslationProvider } from '../../data/translation'
 import {
   EMPTY_RESEARCH_STATE,
   resolveResearchMobileMode,
@@ -24,6 +26,7 @@ interface Props {
 
 export function ResearchSidebar({ active, visible, layout, onLayoutChange, request, initialQuery }: Props) {
   const bridge = useMemo(() => getResearchBridge(), [])
+  const clippings = useMemo(() => getClippingBridge(), [])
   const slotRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [state, setState] = useState<ResearchState>(EMPTY_RESEARCH_STATE)
@@ -83,20 +86,30 @@ export function ResearchSidebar({ active, visible, layout, onLayoutChange, reque
   }
 
   const handleWebSelection = async (action: 'translate' | 'note' | 'copy') => {
+    if (action === 'note') {
+      // 摘录必须落成真正的 WebClipping 实体（阶段一），而不是伪装成一篇笔记：
+      // 网页改版之后，这条摘录仍然能在「我的摘录」里读到原文。
+      const saved = await clippings.captureSelection()
+      if (!saved) {
+        setNotice(clippings.mode === 'desktop'
+          ? '请先在网页中选中文字，再点「保存摘录」。'
+          : '浏览器预览取不到网页选区，请用桌面版。')
+        return
+      }
+      setNotice('已保存到「我的摘录」，可以去中栏整理成笔记。')
+      window.dispatchEvent(new Event('shiyun-library-changed'))
+      return
+    }
     const selection = await bridge.selectedText()
     if (!selection) { setNotice('请先在网页中选中文字。'); return }
     if (action === 'translate') {
-      setNotice('翻译会把所选文字发送到 Bing Translator。')
-      const next = await bridge.createTab(translationUrl(selection.text)); if (next) setState(next)
-    } else if (action === 'copy') {
-      await navigator.clipboard.writeText(selection.text); setNotice('已复制网页选中文字。')
+      const provider = getTranslationProvider()
+      const result = await provider.translate({ text: selection.text, targetLang: 'zh-Hans' })
+      if (!result.ok) { setNotice(result.reason); return }
+      setNotice(result.notice)
+      const next = await bridge.createTab(result.url); if (next) setState(next)
     } else {
-      const note = await window.shiyunDesktop?.annotations.createNote({
-        title: selection.title ? `网页摘录 · ${selection.title}` : '网页摘录',
-        bodyText: `${selection.text}\n\n来源：${selection.url}`,
-      })
-      setNotice(note ? '网页摘录已保存到“我的笔记”。' : '桌面版才能保存网页摘录。')
-      if (note) window.dispatchEvent(new Event('shiyun-library-changed'))
+      await navigator.clipboard.writeText(selection.text); setNotice('已复制网页选中文字。')
     }
   }
 

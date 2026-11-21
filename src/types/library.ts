@@ -36,6 +36,8 @@ export interface LibraryCounts {
   folders: number
   highlights: number
   notes: number
+  /** 网页摘录的数量（阶段一起进左栏「我的摘录」）。 */
+  clippings: number
   links: number
 }
 

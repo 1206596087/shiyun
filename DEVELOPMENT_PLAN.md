@@ -34,7 +34,26 @@
 - [x] PDF / EPUB / 笔记通过统一 SelectionActionService 执行复制、翻译和搜索；笔记选区保留 TipTap 位置，Esc 可关闭工具条。
 - [x] 研究标签新增 `auto / mobile / desktop` 三态；紧凑自动请求手机网页，扩展/沉浸自动回桌面网页，允许逐标签覆盖。
 - [x] 使用本地 HTTP 服务器记录真实 UA，并由打包后的 `诗云.exe` 验证三种切换路径。
-- [ ] 网页标签跨重启恢复和标签休眠尚未实现。
+- [x] 网页标签持久化：URL / 标题 / 顺序 / 当前标签 / 缩放 / UA 模式写进 `research-session.json`，重启按序恢复（≤12），恢复的标签懒加载。
+- [ ] 长期隐藏的标签「休眠」（释放 `WebContentsView` 内存）尚未实现；目前只是懒加载 + 上限 12。
+
+## 阶段一（prompt4）· 标签持久化、网页摘录、TranslationProvider（完成）
+
+- [x] 浏览器标签持久化：`electron/main/researchStore.ts`（原子写、损坏降级）+ `researchView.ts` 的 500ms 去抖与 `will-quit` 同步落盘；启动时 `restoreResearchSession()` 只读数据不建视图。
+- [x] WebClipping 实体：迁移 `004_clippings.ts` 建 `web_clippings`，并以「建新表 → 复制 → 核对行数 → 换名」放宽 `knowledge_links` / `graph_layouts` 的 `kind` 约束加入 `clipping`；`electron/main/db/clippings.ts` 提供增删改查、软删恢复、转笔记。
+- [x] 选区只由主进程读：IPC `clipping:captureSelection`，网页视图仍无 preload（延续 ADR-017）。
+- [x] 摘录进知识图谱：`clip:` 节点、`clip → note` 连线，银河可定位到摘录原文。
+- [x] 「我的摘录」列表页 + 左栏入口 + 计数（`LibraryCounts.clippings`）。
+- [x] TranslationProvider 接口 + `external-web`（Bing，1200 字上限，明示联网）；`local` / `user-api` 返回 `available() === false`。
+- [x] 可重复 E2E：`npm run test:e2e` → `scripts/e2e/research.mjs`（本地 fixture + 打包产物 + 独立 `SHIYUN_DATA_DIR`，断言摘录写入与重启后标签恢复）。
+- [x] 校验：typecheck / lint（0 warning）/ test（21 文件 143 用例）/ build / `pack:offline` 全通过；E2E 7 项全通过。
+
+### 阶段一已知限制
+
+- 标签休眠未做；恢复 12 个标签时只有切到的那个会创建渲染进程，但已打开的不会主动回收。
+- 网页摘录只保存选中的文字与前后 40 字上下文，不保存网页快照；网页改版后仍能读摘录，但不能回到原位置。
+- 翻译只有外部网页一种实现，会把选文作为查询参数发给 Bing；离线或隐私敏感场景应保持「不点」。
+- `web_clippings.note_id` 是 SET NULL 的单向引用，没有「一篇笔记关联多条摘录」的反向列表界面。
 
 ## 0.4.0 专业笔记首批功能
 

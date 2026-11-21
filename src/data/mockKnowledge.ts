@@ -115,7 +115,7 @@ const layouts: GraphLayout[] = nodes.map((item) => {
   const discipline = String(item.metadata.discipline ?? 'medicine')
   const random = mulberry32(hashString(item.id))
   const baseAngle = clusterAngles.get(discipline) ?? 0
-  const typeRadius = { topic: 7.8, book: 9.6, highlight: 12.2, note: 10.9 }[item.type]
+  const typeRadius = ({ topic: 7.8, book: 9.6, highlight: 12.2, note: 10.9, clipping: 11.6 } as Record<KnowledgeNodeType, number>)[item.type]
   const armCurve = typeRadius * 0.18
   const angle = baseAngle + armCurve + (random() - 0.5) * 0.36
   const radius = typeRadius + (random() - 0.5) * 2.1

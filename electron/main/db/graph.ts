@@ -6,6 +6,7 @@ import {
   type GraphSource,
   type ProjectionResult,
   type SourceBook,
+  type SourceClipping,
   type SourceFolder,
   type SourceHighlight,
   type SourceHighlightNote,
@@ -61,6 +62,15 @@ interface PairRow {
   note_id: string
 }
 
+interface ClippingRow {
+  id: string
+  quote: string
+  page_title: string
+  url: string
+  note_id: string | null
+  captured_at: string
+}
+
 interface LinkRow {
   id: string
   source_kind: KnowledgeNodeType
@@ -80,9 +90,11 @@ interface LayoutRow {
   pinned: number
 }
 
-/** graph_layouts.node_kind 只有四种，划线在银河里的前缀是 hl。 */
+/** graph_layouts.node_kind 只有五种，划线在银河里的前缀是 hl，网页摘录是 clip。 */
 function kindPrefix(kind: KnowledgeNodeType): string {
-  return kind === 'highlight' ? 'hl' : kind
+  if (kind === 'highlight') return 'hl'
+  if (kind === 'clipping') return 'clip'
+  return kind
 }
 
 /** 读出投影需要的全部实体（自动过滤软删的书、文件夹与笔记）。 */
@@ -136,6 +148,19 @@ export function loadGraphSource(db: DatabaseSync): GraphSource {
     (row) => ({ highlightId: row.highlight_id, noteId: row.note_id }),
   )
 
+  const clippings = queryAll<ClippingRow>(
+    db,
+    `SELECT id, quote, page_title, url, note_id, captured_at
+       FROM web_clippings WHERE deleted_at IS NULL ORDER BY captured_at DESC`,
+  ).map<SourceClipping>((row) => ({
+    id: row.id,
+    quote: row.quote,
+    pageTitle: row.page_title,
+    url: row.url,
+    noteId: row.note_id,
+    capturedAt: row.captured_at,
+  }))
+
   const links = queryAll<LinkRow>(
     db,
     `SELECT id, source_kind, source_id, target_kind, target_id, relation_type, description
@@ -161,7 +186,7 @@ export function loadGraphSource(db: DatabaseSync): GraphSource {
     }),
   )
 
-  return { folders, books, highlights, notes, highlightNotes, links, layouts }
+  return { folders, books, highlights, notes, highlightNotes, links, layouts, clippings }
 }
 
 /** 把投影出来的新坐标写库；用户没动过的星 pinned = 0，下次仍可重算。 */

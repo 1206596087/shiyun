@@ -1,11 +1,13 @@
 import type { WorkspaceTab } from '../../types/workspace'
 import type { LibraryBridge } from '../../data/libraryBridge'
 import type { AnnotationBridge } from '../../data/annotationBridge'
+import type { ClippingBridge } from '../../data/clippingBridge'
 import type { Highlight } from '../../types/annotation'
 import { ReaderPane, type ReaderFocus } from './ReaderPane'
 import { NoteEditor } from './NoteEditor'
 import { HighlightListPage, NoteListPage } from './AnnotationLists'
-import { IconBook, IconHighlight, IconNote, IconPanel, IconPlus } from './icons'
+import { ClippingListPage } from './ClippingListPage'
+import { IconBook, IconGlobe, IconHighlight, IconNote, IconPanel, IconPlus } from './icons'
 
 interface Props {
   tabs: WorkspaceTab[]
@@ -13,6 +15,7 @@ interface Props {
   rightVisible: boolean
   bridge: LibraryBridge
   annotations: AnnotationBridge
+  clippings: ClippingBridge
   bookTitle: (bookId: string) => string
   focusFor: (bookId: string) => ReaderFocus | null
   onActivate: (id: string) => void
@@ -23,6 +26,8 @@ interface Props {
   onOpenSource: (highlight: Highlight) => void
   onFocusHighlight: (highlight: Highlight) => void
   onTitleChange: (noteId: string, title: string) => void
+  /** 「打开原网页」：交给右栏研究视图去导航，而不是系统浏览器。 */
+  onResearchUrl: (url: string) => void
   /** 划线 / 笔记发生变化后重新计数（左栏的「我的划线 / 我的笔记」）。 */
   onAnnotationsChange?: () => void
   onToggleRight: () => void
@@ -108,6 +113,13 @@ export function ReadingDesk(props: Props) {
               onOpenSource={props.onOpenSource}
               onCreateNote={props.onNewNoteForHighlight}
             />
+          ) : activeTab.kind === 'clippings' ? (
+            <ClippingListPage
+              clippings={props.clippings}
+              onOpenNote={props.onOpenNote}
+              onOpenUrl={props.onResearchUrl}
+              {...(props.onAnnotationsChange ? { onChanged: props.onAnnotationsChange } : {})}
+            />
           ) : (
             <NoteListPage
               annotations={props.annotations}
@@ -128,6 +140,7 @@ const DEMO_NOTE_ID = 'note-demo-rr'
 function TabIcon({ kind }: { kind: WorkspaceTab['kind'] }) {
   if (kind === 'book') return <IconBook size={14} />
   if (kind === 'highlights') return <IconHighlight size={14} />
+  if (kind === 'clippings') return <IconGlobe size={14} />
   return <IconNote size={14} />
 }
 

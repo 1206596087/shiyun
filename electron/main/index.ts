@@ -5,8 +5,10 @@ import { join } from 'node:path'
 import { registerAnnotationIpc } from './annotationIpc.ts'
 import { registerGraphIpc } from './graphIpc.ts'
 import { registerLibraryIpc } from './libraryIpc.ts'
-import { disposeResearchView } from './researchView.ts'
+import { configureResearchSession, disposeResearchView, flushResearchSession, restoreResearchSession } from './researchView.ts'
+import { researchSessionPath } from './researchStore.ts'
 import { registerResearchIpc } from './researchIpc.ts'
+import { registerClippingIpc } from './clippingIpc.ts'
 import { closeLibrary, initLibrary, resolveBookFile } from './libraryService.ts'
 import { installCrashHandlers, logLine, watchWindow } from './logging.ts'
 
@@ -93,6 +95,7 @@ function registerIpc() {
   registerLibraryIpc(assertTrustedSender)
   registerAnnotationIpc(assertTrustedSender)
   registerGraphIpc(assertTrustedSender)
+  registerClippingIpc(assertTrustedSender)
   registerResearchIpc((url) => {
     assertTrustedSender(url ?? '')
     return true
@@ -166,6 +169,10 @@ app.whenReady().then(() => {
   registerIpc()
   installContentSecurityPolicy()
   registerBookProtocol()
+  // 浏览器标签的会话文件放在用户数据目录下（与书库同级，但不进数据库）。
+  configureResearchSession(researchSessionPath(app.getPath('userData')))
+  // 立刻把上次的标签读进内存（只是数据，不创建网页视图），这样研究栏一打开就是上次的样子。
+  restoreResearchSession()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -173,6 +180,7 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
+  flushResearchSession()
   closeLibrary()
 })
 

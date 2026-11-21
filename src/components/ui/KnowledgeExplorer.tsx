@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { KnowledgeGraphData, KnowledgeNode, KnowledgeNodeType } from '../../types/knowledge'
 
-const TYPE_LABELS: Record<KnowledgeNodeType, string> = { topic: '主题', book: '书籍', highlight: '划线', note: '笔记' }
+const TYPE_LABELS: Record<KnowledgeNodeType, string> = { topic: '主题', book: '书籍', highlight: '划线', note: '笔记', clipping: '摘录' }
 
 interface Props {
   graph: KnowledgeGraphData

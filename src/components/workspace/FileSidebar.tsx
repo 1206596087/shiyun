@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { LibraryBook, LibraryCounts, LibraryFolder, LibraryNodeKind, LibraryTree } from '../../types/library'
 import type { LibraryMode } from '../../data/libraryBridge'
-import { IconBook, IconFolder, IconHighlight, IconNetwork, IconNote, IconPlus } from './icons'
+import { IconBook, IconFolder, IconGlobe, IconHighlight, IconNetwork, IconNote, IconPlus } from './icons'
 
 interface Props {
   tree: LibraryTree
@@ -15,6 +15,7 @@ interface Props {
   onOpenBook: (id: string, title: string) => void
   onOpenHighlights: () => void
   onOpenNotes: () => void
+  onOpenClippings: () => void
   onOpenNebula: () => void
   onCreateFolder: (parentId: string | null, name: string) => void
   onRename: (kind: LibraryNodeKind, id: string, name: string) => void
@@ -186,6 +187,11 @@ export function FileSidebar(props: Props) {
           <IconNote size={15} />
           <span>我的笔记</span>
           <b>{counts.notes}</b>
+        </button>
+        <button className="ws-row" onClick={props.onOpenClippings} title="从网页上摘下来的段落，可以整理成笔记或直接删掉">
+          <IconGlobe size={15} />
+          <span>我的摘录</span>
+          <b>{counts.clippings}</b>
         </button>
         <button className="ws-row" onClick={props.onOpenNebula} title="回到银河查看全部知识连接">
           <IconNetwork size={15} />

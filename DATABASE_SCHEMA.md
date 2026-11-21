@@ -1,6 +1,6 @@
 # 数据库设计（SQLite）
 
-> **状态：已实现（M2），`reading_states` 自 M3 起被阅读器真实读写，`highlights` / `notes` / `highlight_notes` 自 M4 起由划线笔记真实读写，`graph_layouts` 自 M5 起由星图投影真实读写。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`，阅读进度见 `reading.ts`（PDF 写 `page`、EPUB 写 `cfi`，`zoom` 共用，去抖 700ms 保存），划线笔记见 `annotations.ts`（划线必带 `quote/prefix/suffix`，`locator_type='pdf_page'` 时 `page` 必填、`locator_type='epub_cfi'` 时 `cfi` 必填，`rect_json` 存归一化 0–1 矩形；笔记正文 JSON 与纯文本双写；关联表复合主键天然幂等），星图见 `graph.ts`（`graph_layouts.node_id` 存带种类前缀的完整节点 id（`book:` / `hl:` / `hlagg:` / `note:` / `topic:`），投影产生的新坐标以 `pinned=0` 落库，用户拖动后写 `pinned=1`）。已应用迁移禁止修改，结构调整必须新增版本。
+> **状态：已实现（M2），`reading_states` 自 M3 起被阅读器真实读写，`highlights` / `notes` / `highlight_notes` 自 M4 起由划线笔记真实读写，`graph_layouts` 自 M5 起由星图投影真实读写，`web_clippings` 自阶段一（迁移 004）起由网页摘录真实读写。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`，阅读进度见 `reading.ts`（PDF 写 `page`、EPUB 写 `cfi`，`zoom` 共用，去抖 700ms 保存），划线笔记见 `annotations.ts`（划线必带 `quote/prefix/suffix`，`locator_type='pdf_page'` 时 `page` 必填、`locator_type='epub_cfi'` 时 `cfi` 必填，`rect_json` 存归一化 0–1 矩形；笔记正文 JSON 与纯文本双写；关联表复合主键天然幂等），星图见 `graph.ts`（`graph_layouts.node_id` 存带种类前缀的完整节点 id（`book:` / `hl:` / `hlagg:` / `note:` / `topic:` / `clip:`），投影产生的新坐标以 `pinned=0` 落库，用户拖动后写 `pinned=1`），网页摘录见 `db/clippings.ts`（原文必填、URL 只收 http/https、软删可恢复、可转笔记）。已应用迁移禁止修改，结构调整必须新增版本。
 
 ## 1. 存储位置与文件
 
@@ -136,13 +136,32 @@ CREATE UNIQUE INDEX idx_links_unique ON knowledge_links(source_id, target_id, re
 
 -- 星图坐标：与知识实体分离，重建星图不改变身份
 CREATE TABLE graph_layouts (
-  node_kind  TEXT NOT NULL CHECK (node_kind IN ('book','highlight','note','topic')),
+  node_kind  TEXT NOT NULL CHECK (node_kind IN ('book','highlight','note','topic','clipping')),
   node_id    TEXT NOT NULL,
   x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL,
   pinned     INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (node_kind, node_id)
 );
+
+-- 网页摘录（迁移 004）：网页的原文副本，不是笔记，也不是书签
+CREATE TABLE web_clippings (
+  id         TEXT PRIMARY KEY,
+  quote      TEXT NOT NULL CHECK (length(quote) > 0),
+  page_title TEXT,
+  url        TEXT,
+  captured_at TEXT NOT NULL,
+  prefix     TEXT,                        -- 选区前 40 字上下文，供日后检索
+  suffix     TEXT,
+  user_note  TEXT,
+  note_id    TEXT REFERENCES notes(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT
+);
+CREATE INDEX idx_clippings_created ON web_clippings(captured_at);
+CREATE INDEX idx_clippings_note    ON web_clippings(note_id);
+CREATE INDEX idx_clippings_host    ON web_clippings(url);
 
 -- 应用设置：键值对，不含大数据
 CREATE TABLE app_settings (
@@ -151,6 +170,8 @@ CREATE TABLE app_settings (
   updated_at TEXT NOT NULL
 );
 ```
+
+> 上面 `knowledge_links.kind` 与 `graph_layouts.node_kind` 里的 `'clipping'` 是迁移 004 加进去的：SQLite 不能 `ALTER TABLE ... CHECK`，所以 004 走「建 `_v4` 新表 → `INSERT ... SELECT` → 核对行数 → DROP 旧表 → RENAME → 重建索引」，整段在一个事务里，行数不一致就抛错回滚。
 
 > `knowledge_links` 故意不加外键：节点种类多样，`source_id` 可能指向 `books` / `highlights` / `notes`，多态外键在 SQLite 里只能靠触发器模拟，收益不抵复杂度。删除实体时由应用层清理关联行；**删除关系本身永远不删除实体**。
 

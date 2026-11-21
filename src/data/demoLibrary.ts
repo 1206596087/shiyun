@@ -47,7 +47,7 @@ export function createDemoTree(): LibraryTree {
       { kind: 'folder', id: 'folder-physics', name: '物理学', parentId: null, children: [] },
     ],
     uncategorized: [],
-    counts: { books: 1, folders: 5, highlights: 20, notes: 10, links: 51 },
+    counts: { books: 1, folders: 5, highlights: 20, notes: 10, clippings: 1, links: 51 },
     dataDir: '浏览器演示模式 · 未连接数据库',
   }
 }

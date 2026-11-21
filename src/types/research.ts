@@ -65,3 +65,43 @@ export const EMPTY_RESEARCH_STATE: ResearchState = {
   visible: false,
   error: null,
 }
+
+/**
+ * 浏览器会话持久化（阶段一）。
+ *
+ * 只存「URL、标题、顺序、当前标签、缩放、UA 模式」——不存表单内容、不存密码、
+ * 也不存任何 DOM 文本：网页正文永远由 Chromium 自己按 URL 重新拉取。
+ */
+export const MAX_RESEARCH_TABS = 12
+export const RESEARCH_SESSION_VERSION = 1
+
+export interface ResearchSessionTab {
+  id: string
+  url: string
+  title: string
+  zoom: number
+  userAgentMode: ResearchUserAgentMode
+}
+
+export interface ResearchSession {
+  version: number
+  tabs: ResearchSessionTab[]
+  activeTabId: string | null
+}
+
+export const EMPTY_RESEARCH_SESSION: ResearchSession = {
+  version: RESEARCH_SESSION_VERSION,
+  tabs: [],
+  activeTabId: null,
+}
+
+/** 只有 http/https 的地址才值得恢复；`about:blank` 之类不落盘。 */
+export function isPersistableResearchUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+

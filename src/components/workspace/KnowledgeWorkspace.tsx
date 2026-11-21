@@ -9,6 +9,7 @@ import type { KnowledgeGraphData } from '../../types/knowledge'
 import type { LibraryCounts, LibraryFolder, LibraryNodeKind, LibraryTree } from '../../types/library'
 import { getLibraryBridge, type LibraryBridge, type LibraryMode } from '../../data/libraryBridge'
 import { getAnnotationBridge } from '../../data/annotationBridge'
+import { getClippingBridge } from '../../data/clippingBridge'
 import { readableNoteTitle, type Highlight } from '../../types/annotation'
 import type { ReaderFocus } from './ReaderPane'
 import { migratePrototypeOnce } from '../../data/prototypeMigration'
@@ -17,9 +18,10 @@ import './Workspace.css'
 
 const STORAGE_KEY = 'shiyun-workspace-ui-v1'
 const RESEARCH_LAYOUT_KEY = 'shiyun-research-layout-v1'
-const EMPTY_COUNTS: LibraryCounts = { books: 0, folders: 0, highlights: 0, notes: 0, links: 0 }
+const EMPTY_COUNTS: LibraryCounts = { books: 0, folders: 0, highlights: 0, notes: 0, clippings: 0, links: 0 }
 const HIGHLIGHTS_TAB: WorkspaceTab = { id: 'highlights', kind: 'highlights', title: '我的划线' }
 const NOTES_TAB: WorkspaceTab = { id: 'notes', kind: 'notes', title: '我的笔记' }
+const CLIPPINGS_TAB: WorkspaceTab = { id: 'clippings', kind: 'clippings', title: '我的摘录' }
 const LEGACY_NOTE_TAB_ID = 'note-or-rr'
 
 function loadResearchLayout(): ResearchLayout {
@@ -92,6 +94,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
   // 桥接对象在挂载时确定一次：桌面版走 IPC，浏览器版走内存演示库。
   const bridge = useMemo(() => getLibraryBridge(), [])
   const annotations = useMemo(() => getAnnotationBridge(), [])
+  const clippings = useMemo(() => getClippingBridge(), [])
   const mode: LibraryMode = bridge.mode
   const bridgeRef = useRef<LibraryBridge | null>(bridge)
   const resizeSide = useRef<'left' | 'right' | null>(null)
@@ -277,8 +280,8 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
     openTab({ id: highlight.bookId, kind: 'book', title })
   }
 
-  const openLibraryList = (kind: 'highlights' | 'notes') => {
-    openTab(kind === 'highlights' ? HIGHLIGHTS_TAB : NOTES_TAB)
+  const openLibraryList = (kind: 'highlights' | 'notes' | 'clippings') => {
+    openTab(kind === 'highlights' ? HIGHLIGHTS_TAB : kind === 'notes' ? NOTES_TAB : CLIPPINGS_TAB)
     void refreshLibrary()
     void recountAnnotations()
   }
@@ -288,15 +291,19 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
    * 书库树里的 counts 是打开书库那一刻的快照，写一篇笔记或划一条线之后就不准了，
    * 所以这里单独问注释层要一次数量。
    */
-  const [annotationCounts, setAnnotationCounts] = useState<{ highlights: number; notes: number } | null>(null)
+  const [annotationCounts, setAnnotationCounts] = useState<{ highlights: number; notes: number; clippings: number } | null>(null)
   const recountAnnotations = useCallback(async () => {
     try {
-      const [highlightList, noteList] = await Promise.all([annotations.listAllHighlights(), annotations.listNotes()])
-      setAnnotationCounts({ highlights: highlightList.length, notes: noteList.length })
+      const [highlightList, noteList, clippingCount] = await Promise.all([
+        annotations.listAllHighlights(),
+        annotations.listNotes(),
+        clippings.count(),
+      ])
+      setAnnotationCounts({ highlights: highlightList.length, notes: noteList.length, clippings: clippingCount })
     } catch {
       // 计数失败不影响主流程，保持上一次的数字
     }
-  }, [annotations])
+  }, [annotations, clippings])
   useEffect(() => {
     void recountAnnotations()
   }, [recountAnnotations])
@@ -433,12 +440,14 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
             ...tree.counts,
             highlights: annotationCounts?.highlights ?? tree.counts.highlights,
             notes: annotationCounts?.notes ?? tree.counts.notes,
+            clippings: annotationCounts?.clippings ?? tree.counts.clippings,
           }}
           onToggle={toggleFolder}
           onSelect={(selectedFolderId) => update({ selectedFolderId })}
           onOpenBook={(id, title) => openTab({ id, title, kind: 'book' })}
           onOpenHighlights={() => openLibraryList('highlights')}
           onOpenNotes={() => openLibraryList('notes')}
+          onOpenClippings={() => openLibraryList('clippings')}
           onOpenNebula={onReturnGalaxy}
           onCreateFolder={(parentId, name) => void mutate('新建文件夹', (bridge) => bridge.createFolder(name, parentId))}
           onRename={(kind: LibraryNodeKind, id, name) => void mutate('重命名', (bridge) => bridge.renameNode(kind, id, name))}
@@ -468,6 +477,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
           rightVisible={state.rightVisible}
           bridge={bridge}
           annotations={annotations}
+          clippings={clippings}
           bookTitle={bookTitle}
           focusFor={(bookId) => focusMap[bookId] ?? null}
           onActivate={(activeTabId) => update({ activeTabId })}
@@ -478,6 +488,11 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
           onOpenSource={openSource}
           onFocusHighlight={openSource}
           onTitleChange={retitleNote}
+          onResearchUrl={(url) => {
+            // 「打开原网页」走右栏原生网页视图；右栏被隐藏时先打开它。
+            if (!state.rightVisible) update({ rightVisible: true })
+            setResearchRequest({ url, newTab: true, token: Date.now() })
+          }}
           onAnnotationsChange={() => void recountAnnotations()}
           onToggleRight={() => update({ rightVisible: !state.rightVisible })}
         />

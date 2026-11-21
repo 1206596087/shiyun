@@ -624,6 +624,10 @@
   border: 1px solid var(--ws-line-strong); border-radius: 6px; color: var(--ws-muted); font-size: 11.5px;
 }
 .annotation-item__actions button:hover { background: var(--ws-hover); color: var(--ws-ink); }
+/* 删除一律用暖红，别让它和「定位原文」长得一样。 */
+.annotation-item__actions button.is-danger { color: #a4552f; border-color: #f0ddd4; }
+.annotation-item__actions button.is-danger:hover { background: #fbf0ec; color: #8d3f1c; }
+.annotation-item__note { margin: 6px 0 0; padding: 6px 8px; background: #fbf7ef; border-radius: 6px; color: #6b6459; font-size: 11.5px; }
 .annotation-item__links { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .annotation-item__links button {
   width: 100%; padding: 5px 7px; border-radius: 5px; color: var(--ws-muted);

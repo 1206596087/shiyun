@@ -47,6 +47,7 @@
 | M5 | 真实知识库生成星图（GraphDataAdapter） | 完成（桌面实机验证） |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 完成（桌面实机验证） |
 | M7 | 打磨、Windows 打包、自动更新 | 完成安装包与打包流程（未签名、无自动更新） |
+| 阶段一 | 浏览器标签持久化 + 网页摘录（WebClipping）+ TranslationProvider | 完成（桌面实机 + `scripts/e2e/research.mjs` 通过） |
 
 细节见 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)。任何"未实现"的界面元素都在 UI 中显式标注「开发中 / Mx 接入」，不使用静态假功能冒充已完成功能。
 
@@ -170,9 +171,19 @@ npm run build:web   # 纯网页构建
 - 视图不是 DOM 节点，所以渲染进程只负责报矩形：`ResearchSidebar` 用 `ResizeObserver` + `window.resize` 把 `.research-view` 的 `getBoundingClientRect()` 报给主进程，拖右栏宽度、开关右栏、切空间都会跟着走；隐藏时把 bounds 设成 `0,0,0,0`，避免它浮在银河上面。
 - 地址栏接受三类输入（`src/data/researchUrl.ts` 纯函数）：完整网址、像域名的裸串（补 `https://`）、其余当搜索词走 Bing；`file:`、`shiyun-book:`、`javascript:` 一律降级成搜索词，不会让网页读到本地文件。
 - 后退 / 前进 / 刷新来自当前标签的 `navigationHistory`，标题与 loading 由主进程推事件；网页 `window.open` 会安全地新建研究标签，权限（摄像头、麦克风、定位、通知、剪贴板）全部默认拒绝，下载被 `preventDefault`。
-- 用户可先在真实网页里选中文字，再点固定在研究栏底部的「翻译选中 / 保存摘录 / 复制」。只有明确点击翻译后，最多 5000 字的选文才会发送到 Bing Translator；保存摘录则写入本地笔记并附来源网址。
+- 用户可先在真实网页里选中文字，再点固定在研究栏底部的「翻译选中 / 保存摘录 / 复制」。只有明确点击翻译后，最多 1200 字的选文才会作为查询参数发给 Bing Translator（面板上直说会联网）；「保存摘录」不再塞成一篇假笔记，而是存成独立的网页摘录实体（见下一节）。
 - 浏览器模式没有主进程，也不再假装：面板里写明「右侧网页在桌面版里是真实网页」，并给一个「在系统浏览器里搜索」的出口（ADR-017）。
 - 实机证据：同一份 `out/` 构建产物里，研究栏的页面视口是 262×568，右栏占位矩形是 262×570（差 2px 是边框），说明原生视图确实被摆在右栏里；回银河后 `visible:false`、再进书房恢复，`canGoBack` 随导航变化。
+
+### 浏览器标签持久化与网页摘录（阶段一）
+
+- **标签持久化**：会话写进 `%APPDATA%\shiyun\research-session.json`（`electron/main/researchStore.ts`），只存 URL、标题、顺序、当前标签、缩放与 UA 模式；写入是「临时文件 + rename」的原子替换，损坏或不可写时退回空会话、不阻塞启动。启动时 `restoreResearchSession()` 只把数据读进内存，恢复出来的标签**懒加载**——切到它才创建 `WebContentsView`，所以恢复 12 个标签也不会瞬间多出 12 个渲染进程。上限 `MAX_RESEARCH_TABS = 12`。
+- **网页摘录（WebClipping）**：新表 `web_clippings`（迁移 `004_clippings.ts`），字段含原文、页面标题、URL、上下文前缀/后缀、附注、可选关联笔记与软删除。摘录是**本地副本**：网页改版后仍能读到当时那句话；不承诺回到网页原位。
+- 选区只由主进程读取：IPC `clipping:captureSelection` 在主进程里对当前网页执行 `window.getSelection()`，网页视图始终**没有 preload**，渲染进程只拿到结果，拿不到网页的其它能力。
+- 「我的摘录」列表页可以「整理成笔记」（把引文 + 来源写进新笔记并回填 `note_id`）、打开原网页、删除（软删除，笔记不受影响）。
+- 摘录会进知识图谱：`src/data/graphProjection.ts` 生成 `clip:` 节点（青色）与 `clip → note` 的 `annotates` 连线，银河里双击摘录节点会打开它的原文；`knowledge_links` / `graph_layouts` 的 `kind` 约束在迁移 004 里以「建新表 → 复制 → 核对行数 → 换名」的方式放宽，旧数据不动。
+- **TranslationProvider**（`src/data/translation.ts`）：接口固定为 `{id,label,sendsTextOverNetwork,available,translate}`，当前只有 `external-web` 可用（Bing Translator，最多 1200 字，返回 `notice` 明说会把选文发给第三方）；`local` 与 `user-api` 明确 `available() === false`，不会假装能离线翻译。
+- **可重复验证**：`npm run test:e2e`（`scripts/e2e/research.mjs`）用打包产物 + 独立 `SHIYUN_DATA_DIR` 起应用，选中本地 fixture 页面的一段文字、调用保存摘录、重启后断言标签恢复且摘录仍在。
 
 ### Electron 外壳（M1）
 
@@ -220,7 +231,7 @@ docs/screenshots/       # README 截图
 - PDF 默认仍是单页阅读；实验连续模式只渲染当前页 ±1 页。复杂长文档、旋转页/混合纸张尺寸与跨页选区仍需继续验证。EPUB 的主题、双栏、滚动模式未提供，`scroll_ratio` 字段先占位。
 - 右侧网页研究栏在桌面版里是真实浏览器视图（多标签、关闭、地址栏、历史、刷新、逐标签缩放、外部打开）；浏览器模式没有主进程，只显示说明与外部浏览器出口，不假装加载网页。
 - 新安装默认研究栏宽 360px，可拖到 900px，也可一键切到扩展或沉浸布局。少数固定宽度网站仍可能横向溢出，可用逐标签缩放或外部浏览器处理。
-- 网页标签只保存于本次应用会话，重启后不会自动恢复；网页原生视图上无法安全注入浮动 DOM 工具条，因此网页选区动作固定在研究栏底部，PDF / EPUB / 笔记仍使用贴近选文的浮动工具条。
+- 网页标签会写进用户数据目录下的 `research-session.json`（只存 URL、标题、顺序、当前标签、缩放与 UA 模式），重启后按原顺序恢复，最多 12 个；恢复出来的标签是懒加载的，切到它才创建网页视图。表单内容、密码、DOM 一律不存。网页原生视图上无法安全注入浮动 DOM 工具条，因此网页选区动作固定在研究栏底部，PDF / EPUB / 笔记仍使用贴近选文的浮动工具条。
 - 网页视图不进入 DOM，所以它不吃书房的 CSS，也不会被 DOM 截图工具拍到（README 里那张图是把该视图的截图贴回它所在的矩形）。
 - 回收站只有数据层接口（`restoreBook`），还没有界面；书库位置固定为 `%APPDATA%\shiyun`，未做自定义目录设置。
 - 桌面窗口已实机验证；M7 出的是**未签名**的 NSIS 安装包，首次运行会有 SmartScreen 提示。自动更新只生成了 `latest.yml` 元数据，还没有配置发布通道与 `autoUpdater` 接线。

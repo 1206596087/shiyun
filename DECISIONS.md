@@ -4,6 +4,54 @@
 
 ---
 
+## ADR-022 · 翻译先只做「外部网页」一种实现，接口留三种
+
+**背景**：选中一段话想翻译，本来在 `BrowserSidebar` 里直接拼一个 Bing 翻译链接就完了。但 prompt4 要求一个 `TranslationProvider` 抽象，因为后面可能接本地模型（离线、隐私好）或用户自己的 API Key。
+
+**决策**：
+- `src/data/translation.ts` 定义 `TranslationProvider{id,label,sendsTextOverNetwork,available,translate}`，`translate()` 返回 `{ok:true,url,notice}` 或 `{ok:false,reason}`。
+- 只实现 `external-web`（Bing Translator，截断到 1200 字），并在 `notice` 里明说「所选文字会作为查询参数发送到第三方」。
+- `local` 与 `user-api` 占位实现 `available() === false`：接口存在，但界面不会假装能用。
+- 触发方式仍是用户点「翻译选中」，不做划词自动翻译。
+
+**理由**：先把接口立住，后面接本地模型不用改界面；同时「会联网」这件事必须在 UI 上说清楚，而不是藏在代码里。
+
+**代价**：翻译结果在浏览器标签里打开，不是行内对照；1200 字上限对长段落会截断。**重新评估**：接入本地模型或用户 API 时，把截断上限与提示语一起改，并补一条 ADR 说明数据流向。
+
+---
+
+## ADR-021 · 浏览器标签会话存 JSON 文件，不进数据库
+
+**背景**：prompt4 要求浏览器标签跨重启恢复。可选方案：写 `app_settings` 表、新建 `research_tabs` 表、或写用户数据目录下的一个 JSON 文件。
+
+**决策**：
+- 会话写 `<userData>/research-session.json`（`electron/main/researchStore.ts`），结构 `{version, tabs:[{id,url,title,zoom,userAgentMode}], activeTabId}`。
+- 只存可重建界面的字段：不存表单内容、不复存密码、不存 DOM、不存 page source。
+- 写入去抖 500ms + `will-quit` 强制 flush；写盘用「临时文件 + rename」；读取失败（缺文件 / JSON 损坏 / 字段非法）一律降级成空会话，并在返回里带 `ok/repaired`，绝不因为会话损坏而阻塞启动。
+- 恢复只读数据不建视图：`restoreResearchSession()` 在 `whenReady` 里调用，切到标签时才 `new WebContentsView`。
+
+**理由**：标签是界面状态而不是知识，放数据库会让备份、导出、迁移都多背一份无意义的界面数据；JSON 文件坏了删掉即可，数据库表坏了要修库。上限 `MAX_RESEARCH_TABS = 12` 也只需要在读取时截断。
+
+**代价**：会话与书库不同步（备份数据库不会带走标签）；多窗口场景没有考虑。**重新评估**：如果以后要做「工作区布局」整体保存，再把标签会话迁移进数据库。
+
+---
+
+## ADR-020 · 网页摘录独立建表，并重建两张带 CHECK 的表
+
+**背景**：原来的「保存摘录」把网页选文拼成一篇文章塞进 `notes`（正文里带来源），结果是：笔记列表里混进一堆不是笔记的东西，没法记「来源 URL / 页面标题 / 前后文」，也没法以后单独检索网页摘录。prompt4 要求 WebClipping 成为独立实体。
+
+**决策**：
+- 新增迁移 `004_clippings.ts`，建 `web_clippings`（`quote` 必填、`url` 只收 http/https、`note_id` 单向引用 `notes(id) ON DELETE SET NULL`、软删 `deleted_at`）。
+- 同一迁移里**重建** `knowledge_links` 与 `graph_layouts`，把 `kind` / `node_kind` 的 CHECK 从 `('book','highlight','note','topic')` 放宽到含 `'clipping'`。SQLite 不支持改 CHECK，只能「建 `_v4` 新表 → `INSERT ... SELECT` → `countRows` 核对 → DROP → RENAME → 重建索引」，全部在一个事务里，行数不一致就抛错回滚。
+- 摘录可以「整理成笔记」（生成笔记并回填 `note_id`），也可以直接进知识图谱（`clip:` 节点 + `clip → note` 连线）。
+- 选区由主进程读（`clipping:captureSelection`），网页视图仍不挂 preload。
+
+**理由**：摘录与笔记是两种东西——摘录是「别人说的话的副本」，笔记是「我说的话」。混在一张表里，删除语义、检索、图谱类型都会跟着乱。CHECK 约束值一旦定死，加新种类就必须重建表，晚改比早改贵。
+
+**代价**：迁移 004 会重写两张表（对几万行的库也是一次性成本，启动时已先备份）；`note_id` 没有反向的多对多表，一篇笔记暂时只能被「它自己关联的摘录」单向指过来。**重新评估**：如果摘录要挂到多篇笔记，再加 `clipping_notes` 关联表并写 ADR。
+
+---
+
 ## ADR-019 · 项目自身用 MIT 许可证发布
 
 **背景**：仓库在 GitHub 上公开，但根目录只有 `THIRD_PARTY_LICENSES.md`（记录依赖的授权），没有项目自己的 `LICENSE`。**公开可见不等于授权**：没有许可证时，默认的著作权规则是「保留所有权利」，别人不能合法地复用、修改、分发这份代码，想用的人只能提 issue 问。所以要么明确选一个许可证，要么在 README 里写清楚「仅供阅读」。

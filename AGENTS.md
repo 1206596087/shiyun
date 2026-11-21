@@ -91,10 +91,11 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 - **PDF.js 运行资产**：`public/pdfjs/`（`cmaps` 169 个 + `standard_fonts` 16 个）由 `npm run assets` 从 `pdfjs-dist` 复制，已挂在 `predev` / `predev:web` / `prebuild` / `prebuild:web` 上；`public/pdfjs` 不进版本库。缺了这组文件，中文 PDF 的字形会退化成方块。
 - **书籍文件访问**：渲染进程只有 `shiyun-book://book/<id>/source.<ext>` 这种 URL，没有绝对路径。验证阅读器时可以在临时脚本里用 `node:sqlite` 直接往书库插一行 + 把样例文件放到 `books/<id>/`，验证完记得把测试数据删干净。
 
-## 7.1 两条血泪规则（务必遵守）
+## 7.1 三条血泪规则（务必遵守）
 
 1. **绝不用 `Get-Content | Set-Content`（或 `-replace ... | Set-Content`）改源码。** 中文会被按 GBK 误解码重写成 mojibake，文件变成非法 UTF-8，`tsc` 报 `TS1490 File appears to be binary`，`read`/`write` 工具也会因为非法编码拒绝该文件，只能从临时副本重建。改字一律用 `edit` / `write` 工具；脚本文件（`.cjs`）也一样。
 2. **不要用并发 Electron 实例验证同一个数据目录**，先杀进程再启动，否则 SQLite 与 Chromium cache 会互相打脸。
+3. **`ELECTRON_RUN_AS_NODE=1` 会传给子进程。** 从 Node 脚本里 `spawn` 诗云.exe / electron.exe 时，这个变量会让它退化成纯 Node（进程立刻以 0 退出、什么都不做、连数据目录都不创建）。脚本里必须先 `delete env.ELECTRON_RUN_AS_NODE` 再 spawn——`scripts/e2e/research.mjs` 就是这么做的。排查「打包后的 exe 一启动就退出、日志也没有」时先查这条。
 
 ## 7.2 数据库改动清单
 
@@ -103,9 +104,19 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 - 删除语义的硬约束写在 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) 第 4 节：删书不删笔记、删关系不删实体。改这条之前先改文档再改代码。
 - 仓储层改动必须加/改测试：`electron/main/db/library.test.ts` 已有迁移幂等、层级上限、删除语义、导入去重、原型迁移幂等 10 个用例。
 
+## 7.3 E2E 脚本
+
+- `npm run test:e2e` → `scripts/e2e/research.mjs`：起本地 http fixture，用打包产物 + 独立 `SHIYUN_DATA_DIR` 启动，验证「网页选区 → 摘录落库 → 重启后标签恢复、摘录仍在」。默认找 `release/win-unpacked/诗云.exe`，可用 `SHIYUN_APP_EXE` 指向别处的构建产物。
+- 断言一律用 `waitFor()` 轮询，不要写「点完立刻断言」——网页加载、相机飞行、IPC 都有延迟。
+- 跑之前先 `npm run pack:offline`；跑完 `Get-Process 诗云 | Stop-Process -Force` 收尾，否则 `app.asar` 会被锁住，下一次打包报 `EBUSY`（锁住时连 `release/` 目录都改不了名，只能换个输出目录 `-c.directories.output=release-tmp` 验证）。
+
 ## 8. 下一步建议
 
-M8（如果继续）优先做三件事：**代码签名**（有证书才能免 SmartScreen）→ **自动更新通道**（`latest.yml` 已经在 `release/` 里产出，接 `autoUpdater` 即可）→ **首屏拆包**（`index-*.js` 5.6 MB，`pdfjs-dist` 与 `epubjs` 适合动态 import）。其余可选项见 DEVELOPMENT_PLAN 的 M7 已知限制。
+**阶段一（prompt4）已落地，不要重做**：`electron/main/researchStore.ts`（会话 JSON 原子写）、`researchView.ts` 的懒加载与 `restoreResearchSession()`、迁移 `004_clippings.ts`、`db/clippings.ts`、`clippingIpc.ts`、`src/data/clippingBridge.ts`、`src/types/clipping.ts`、`ClippingListPage.tsx`、`src/data/translation.ts`、`scripts/e2e/research.mjs`。有 143 个单测 + 7 项 E2E 护着。
+
+prompt4 的下一阶段按顺序是：**思维导图与知识关联工作台** → **中文智能关联（术语词典 + FTS5 trigram + IDF）** → **多银河** → **导入与文档转换（Pandoc 只做简单转换）**。做之前先读 prompt4 的对应章节，别把它的「可选」当「必须」。
+
+M8（如果继续）优先做三件事：**代码签名**（有证书才能免 SmartScreen）→ **自动更新通道**（`latest.yml` 已经在 `release/` 里产出，接 `autoUpdater` 即可）→ **首屏拆包**（`index-*.js` 4.2 MB，`pdfjs-dist`、`epubjs`、`mathlive`、`katex` 已动态 import，剩下的大头是 three/drei）。其余可选项见 DEVELOPMENT_PLAN 的 M7 已知限制。
 
 M7 已经落地的东西不要重做：`package.json` 的 `build` 段（NSIS、`artifactName`、`buildResources: build`）、`build/icon.ico` + `scripts/build-icon.mjs`、`electron/main/logging.ts`（崩溃日志）、`app.setPath('userData', …)` 的数据目录钉死。打包相关的两条硬事实：
 1. **不要删 `app.setPath('userData', …)`**。打包后 `app.getName()` 是「诗云」，去掉这行会让安装版换一个数据目录，用户会以为书全丢了。

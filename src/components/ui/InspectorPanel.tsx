@@ -18,7 +18,7 @@ interface Props {
   onClose: () => void
 }
 
-const labels = { topic: '主题星团', book: '书籍', highlight: '划线', note: '笔记' }
+const labels = { topic: '主题星团', book: '书籍', highlight: '划线', note: '笔记', clipping: '网页摘录' }
 
 export function InspectorPanel(props: Props) {
   const [relationType, setRelationType] = useState('relates-to')

@@ -10,6 +10,7 @@ import type {
   UpdateNoteInput,
 } from '../../src/types/annotation.ts'
 import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
+import type { CreateClippingInput, UpdateClippingInput, WebClipping } from '../../src/types/clipping.ts'
 import type { ResearchBounds, ResearchState, ResearchUserAgentMode } from '../../src/types/research.ts'
 import type { CreateGalaxyInput, GalaxyPositionInput, GalaxyUniverse, UpdateGalaxyInput } from '../../src/types/universe.ts'
 
@@ -99,6 +100,21 @@ export interface ShiyunResearchApi {
   onState: (listener: (state: ResearchState) => void) => () => void
 }
 
+/** 网页摘录（阶段一）：选区由主进程读取，渲染进程只能存/查/改附注。 */
+export interface ShiyunClippingApi {
+  list: () => Promise<WebClipping[]>
+  get: (clippingId: string) => Promise<WebClipping | null>
+  count: () => Promise<number>
+  create: (input: CreateClippingInput) => Promise<WebClipping>
+  update: (clippingId: string, input: UpdateClippingInput) => Promise<WebClipping>
+  remove: (clippingId: string) => Promise<boolean>
+  restore: (clippingId: string) => Promise<boolean>
+  trash: () => Promise<WebClipping[]>
+  toNote: (clippingId: string) => Promise<{ clipping: WebClipping; noteId: string; created: boolean }>
+  /** 「保存摘录」按钮：由主进程去网页视图里取当前选区。 */
+  captureSelection: (userNote?: string) => Promise<WebClipping | null>
+}
+
 export interface ShiyunDesktopApi {
   maintenance: MaintenanceApi
   getRuntimeInfo: () => Promise<{ platform: string; version: string; electron: string }>
@@ -107,6 +123,7 @@ export interface ShiyunDesktopApi {
   annotations: ShiyunAnnotationApi
   graph: ShiyunGraphApi
   research: ShiyunResearchApi
+  clippings: ShiyunClippingApi
 }
 
 const library: ShiyunLibraryApi = {
@@ -179,6 +196,19 @@ const research: ShiyunResearchApi = {
   },
 }
 
+const clippings: ShiyunClippingApi = {
+  list: () => ipcRenderer.invoke('clipping:list'),
+  get: (clippingId) => ipcRenderer.invoke('clipping:get', { clippingId }),
+  count: () => ipcRenderer.invoke('clipping:count'),
+  create: (input) => ipcRenderer.invoke('clipping:create', input),
+  update: (clippingId, input) => ipcRenderer.invoke('clipping:update', { clippingId, ...input }),
+  remove: (clippingId) => ipcRenderer.invoke('clipping:delete', { clippingId }),
+  restore: (clippingId) => ipcRenderer.invoke('clipping:restore', { clippingId }),
+  trash: () => ipcRenderer.invoke('clipping:trash'),
+  toNote: (clippingId) => ipcRenderer.invoke('clipping:toNote', { clippingId }),
+  captureSelection: (userNote) => ipcRenderer.invoke('clipping:captureSelection', userNote === undefined ? {} : { userNote }),
+}
+
 const desktopApi: ShiyunDesktopApi = {
   maintenance: {
     exportBundle: () => ipcRenderer.invoke('maintenance:exportBundle'),
@@ -194,6 +224,7 @@ const desktopApi: ShiyunDesktopApi = {
   annotations,
   graph,
   research,
+  clippings,
 }
 
 contextBridge.exposeInMainWorld('shiyunDesktop', desktopApi)

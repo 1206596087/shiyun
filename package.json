@@ -25,7 +25,8 @@
     "pack": "npm run build && electron-builder --win --x64 --dir --publish never",
     "dist": "npm run build && electron-builder --win --x64 --publish never",
     "pack:offline": "npm run build && electron-builder --win --x64 --dir --publish never -c.electronDist=node_modules/electron/dist",
-    "dist:offline": "npm run build && electron-builder --win --x64 --publish never -c.electronDist=node_modules/electron/dist"
+    "dist:offline": "npm run build && electron-builder --win --x64 --publish never -c.electronDist=node_modules/electron/dist",
+    "test:e2e": "node scripts/e2e/research.mjs"
   },
   "build": {
     "appId": "com.shiyun.universe",

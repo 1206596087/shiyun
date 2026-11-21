@@ -168,6 +168,35 @@ App boot ── getGraphBridge().load() ── graphBridge ── ipcRenderer �
 - **隐藏而不是销毁**：切到银河时只把 bounds 归零（`visible:false`），`WebContents` 保留，回书房时立即可用；窗口关闭才 `disposeResearchView()`。
 - **浏览器模式降级**：没有 `window.shiyunDesktop.research` 时 `getResearchBridge()` 返回全 no-op 的桥，面板显示「右侧网页在桌面版里是真实网页」并给外部浏览器出口（ADR-017）。
 
+## 3.6 网页摘录与标签会话（阶段一）
+
+```text
+网页选区（WebContentsView 里，没有 preload）
+  ├ 用户在网页里选中文字（普通鼠标选择，宿主管不到它的 DOM）
+  └ 点研究栏底部「保存摘录」
+        └ preload: clippings.captureSelection() ── ipc ──> 主进程 clippingIpc
+                                                          ├ activeResearchTab().webContents.executeJavaScript('getSelection()')
+                                                          ├ webContents.getURL() / getTitle()
+                                                          └ clippings.createClipping(db, {quote,url,pageTitle,prefix,suffix})
+渲染进程只拿到 {id, quote, pageTitle, url, ...}；网页的其它能力一点也没暴露。
+
+标签会话（重启恢复）
+  researchView.pushState() ── 500ms 去抖 ──> flushSession()
+      └ researchStore.writeResearchSession(<userData>/research-session.json)
+            └ 只写 {version, tabs:[{id,url,title,zoom,userAgentMode}], activeTabId}
+  下次启动 whenReady：
+      configureResearchSession(path) → restoreResearchSession()（只读进内存，不建视图）
+      用户真正切到某个标签 → ensureTabView() → new WebContentsView + loadURL
+```
+
+要点：
+
+- **摘录是本地副本，不是书签**：`web_clippings` 存原文 + 前后 40 字上下文 + 标题 + URL，网页改版后仍可读；不承诺回到网页原位（没有 DOM 快照，也不该有）。
+- **选区只在主进程读**：延续 ADR-017 的「网页视图不挂 preload」，`executeJavaScript` 只在用户点击后由主进程调用一次，返回值之外不暴露任何网页能力。
+- **摘录进图谱**：`graphProjection` 生成 `clip:` 节点与 `clip → note` 的 `annotates` 边；摘录没有所属文件夹，聚到它关联笔记的星团里，没关联的就近中性分布。
+- **会话与书库分开存**：标签是「界面状态」，不是知识，所以放 JSON 文件而不是 `app_settings`；写盘走临时文件 + rename，损坏就退回空会话（宁可丢标签，也不要卡启动）。
+- **懒加载**：恢复 12 个标签只在内存里放 12 条记录，切到哪个才建哪个 `WebContentsView`；`disposeResearchView()` 在窗口关闭时统一释放。
+
 ## 4. 书房结构
 
 ```text
