@@ -7,8 +7,16 @@ import { registerLibraryIpc } from './libraryIpc.ts'
 import { disposeResearchView } from './researchView.ts'
 import { registerResearchIpc } from './researchIpc.ts'
 import { closeLibrary, initLibrary, resolveBookFile } from './libraryService.ts'
+import { installCrashHandlers, logLine, watchWindow } from './logging.ts'
 
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * 数据目录固定为 `%APPDATA%\shiyun`，不跟随 productName（打包后 app.getName() 会变成「诗云」）。
+ * 理由：开发模式、安装版、以后的自动更新必须读写同一个书库；用户的书不能因为换了一个
+ * 启动方式就"消失"。升级安装也不动这个目录，卸载时同样不删（见 AGENTS §8）。
+ */
+app.setPath('userData', join(app.getPath('appData'), 'shiyun'))
 
 /**
  * 书籍文件通过自定义协议交给渲染进程，而不是让渲染层拿到绝对路径：
@@ -153,6 +161,7 @@ function createWindow() {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
+  watchWindow(mainWindow)
   mainWindow.on('closed', () => {
     disposeResearchView()
     mainWindow = null
@@ -171,6 +180,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  installCrashHandlers()
+  logLine('[startup]', `electron ${process.versions.electron} node ${process.versions.node} userData ${app.getPath('userData')}`)
   // 书库打不开就不要开窗口：半迁移的库上继续写，比拒绝启动危险得多。
   try {
     initLibrary()

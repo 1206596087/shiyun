@@ -46,7 +46,7 @@
 | M4 | 划线、笔记、多对多关联 | 完成（桌面实机验证） |
 | M5 | 真实知识库生成星图（GraphDataAdapter） | 完成（桌面实机验证） |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 完成（桌面实机验证） |
-| M7 | 打磨、Windows 打包、自动更新 | 下一步 |
+| M7 | 打磨、Windows 打包、自动更新 | 完成安装包与打包流程（未签名、无自动更新） |
 
 细节见 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)。任何"未实现"的界面元素都在 UI 中显式标注「开发中 / Mx 接入」，不使用静态假功能冒充已完成功能。
 
@@ -78,6 +78,16 @@ npm run dev
 >
 > 若终端里有 `ELECTRON_RUN_AS_NODE=1`（某些 Electron 宿主的子进程会继承），启动前需要清掉，否则窗口不会出现。
 
+**打包成 Windows 安装包**：
+
+```bash
+npm run dist          # 出 release/Shiyun-<version>-win-x64.exe（NSIS 安装器）
+npm run pack          # 只出 release/win-unpacked/ 免安装目录，便于快速验证
+npm run dist:offline  # 同上，但用已装好的 node_modules/electron/dist 打包（GitHub 不可达时用这个）
+```
+
+> 安装包约 160 MB（Electron 本体占绝大部分），`release/` 不进版本库。安装器**没有代码签名**，第一次运行会被 Windows SmartScreen 拦一下（「更多信息 → 仍要运行」）。安装与升级都**不会**动 `%APPDATA%\shiyun`，卸载也不删书库——升级前建议整目录备份一份。
+
 **校验命令**：
 
 ```bash
@@ -89,6 +99,15 @@ npm run build:web   # 纯网页构建
 ```
 
 ## 已实现
+
+### 打包与运行状态（M7）
+
+- `electron-builder` + NSIS 安装器：`release/Shiyun-0.1.0-win-x64.exe`（164 MB）、`latest.yml`、`blockmap` 一并产出；`release/` 已被 `.gitignore` 忽略。
+- 应用图标 `build/icon.ico`（7 个尺寸，由 `scripts/build-icon.mjs` 从 `build/icon-*.png` 打包；PNG 由 System.Drawing 画出，不引图像依赖）。缺了它 `electron-builder` 会用 Electron 默认图标。
+- **数据目录钉死为 `%APPDATA%\shiyun`**：打包后 `app.getName()` 会变成「诗云」，若跟随默认值会换一个 userData 目录，用户的书看起来像"丢了"。主进程在 `whenReady` 之前 `app.setPath('userData', join(app.getPath('appData'), 'shiyun'))`。
+- 崩溃与日志：`electron/main/logging.ts` 把主进程未捕获异常写进 `%APPDATA%\shiyun\logs\main-YYYY-MM-DD.log` 并弹一次可读的错误框；渲染进程 `render-process-gone` / `unresponsive` 也记一行。静默崩溃是最难查的 bug，这里宁可多一条日志。
+- 键盘：书房内 `Ctrl/Cmd+O` 导入书籍、`Ctrl/Cmd+B` 开关右栏；标签用 `role="tab"` + `aria-selected`，全局 `:focus-visible` 有可见焦点环。
+- 安装包实机验证：`release/win-unpacked/诗云.exe` 启动后 `window.shiyunDesktop` 六个能力齐全（`getRuntimeInfo`/`openExternal`/`library`/`annotations`/`graph`/`research`），`library.getMeta()` 指向 `C:\Users\admin\AppData\Roaming\shiyun`，`listTree()` 读到已有的 5 本书 / 20 条划线 / 10 篇笔记，`pdfjs/cmaps` 资源返回 200，星图照常投影出 36 节点 / 71 关系。
 
 ### 银河大厅（M0 基线，保留原始实现）
 
@@ -174,7 +193,10 @@ electron/
 ├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态、划线笔记、星图投影读取
 ├─ preload/index.ts     # contextBridge 暴露的最小桌面 API
 scripts/
-└─ copy-pdfjs-assets.mjs # 把 pdfjs 的 cmaps / standard_fonts 复制到 public/pdfjs
+├─ copy-pdfjs-assets.mjs # 把 pdfjs 的 cmaps / standard_fonts 复制到 public/pdfjs
+└─ build-icon.mjs        # 把 build/icon-*.png 打包成 build/icon.ico
+build/
+└─ icon.ico              # 应用与安装器图标（buildResources）
 src/
 ├─ components/
 │  ├─ galaxy/           # 银河装饰层：粒子、星核、背景、相机
@@ -197,7 +219,8 @@ docs/screenshots/       # README 截图
 - 研究栏默认 294px（可拖到 440px），桌面版网站（Bing、维基桌面版）在这个宽度里会横向溢出——这是网站自己的排版，界面没有做缩放伪装；把右栏拖宽或直接打开移动版链接都可读。
 - 网页视图不进入 DOM，所以它不吃书房的 CSS，也不会被 DOM 截图工具拍到（README 里那张图是把该视图的截图贴回它所在的矩形）。
 - 回收站只有数据层接口（`restoreBook`），还没有界面；书库位置固定为 `%APPDATA%\shiyun`，未做自定义目录设置。
-- 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
+- 桌面窗口已实机验证；M7 出的是**未签名**的 NSIS 安装包，首次运行会有 SmartScreen 提示。自动更新只生成了 `latest.yml` 元数据，还没有配置发布通道与 `autoUpdater` 接线。
+- 安装包没有做多语言安装界面、没有做便携版（portable）与 arm64 目标；升级策略是覆盖安装，书库不受影响。
 - 界面字体只用系统字体栈（原 Google Fonts `@import` 会在离线时把 `document.fonts.ready` 拖住，已移除）；中文若无系统字体再考虑自托管。
 - 星图坐标是确定性的伪随机布局（按文件夹分星团 + 抖动），不是力导向模拟：同一份书库两次投影一致，但增删节点后邻居不会自动重排。超过 5000 节点时的聚合星团分支在正常书库里看不到。
 - 没有文件夹的书全部落在「未分类」星团，视觉上是一个密集小星团——这是书库结构的真实反映，没有做美化。浏览器模式没有真实书库，星图仍是原型数据，状态条会写「浏览器存储」。

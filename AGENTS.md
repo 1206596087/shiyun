@@ -103,6 +103,14 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 
 ## 8. 下一步建议
 
+M8（如果继续）优先做三件事：**代码签名**（有证书才能免 SmartScreen）→ **自动更新通道**（`latest.yml` 已经在 `release/` 里产出，接 `autoUpdater` 即可）→ **首屏拆包**（`index-*.js` 5.6 MB，`pdfjs-dist` 与 `epubjs` 适合动态 import）。其余可选项见 DEVELOPMENT_PLAN 的 M7 已知限制。
+
+M7 已经落地的东西不要重做：`package.json` 的 `build` 段（NSIS、`artifactName`、`buildResources: build`）、`build/icon.ico` + `scripts/build-icon.mjs`、`electron/main/logging.ts`（崩溃日志）、`app.setPath('userData', …)` 的数据目录钉死。打包相关的两条硬事实：
+1. **不要删 `app.setPath('userData', …)`**。打包后 `app.getName()` 是「诗云」，去掉这行会让安装版换一个数据目录，用户会以为书全丢了。
+2. **`npm run dist` 在 GitHub 不可达时会卡 10 分钟再失败**（它在下载 Electron 发行包）。这时用 `npm run dist:offline` / `pack:offline`，它们带 `-c.electronDist=node_modules/electron/dist`，直接用已装好的 Electron；NSIS 与 winCodeSign 走 `%LOCALAPPDATA%\electron-builder\Cache`（准备方法见 §7）。
+
+## 8.1 M6 及更早的下一步记录（历史）
+
 M7 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：打磨交互（键盘可达性与焦点顺序、快捷键、命令面板）+ 出 Windows 安装包（`electron-builder` NSIS）+ 崩溃日志。打包前必读三件事：1) `node:sqlite` 是 Electron 内置模块，**不要**让打包器去 `asar` 外找原生 `.node`（没有原生模块要 unpack，`asar` 保持默认）；2) `public/pdfjs/` 是构建期复制的运行资产，打包 config 的 `files`/`extraResources` 必须把它带上，否则中文 PDF 变方块；3) 数据目录是 `%APPDATA%\shiyun`，升级安装不能清它，卸载也不该删（要在文档里写明备份路径）。另外 `electron-builder` 需要签名证书才能免 SmartScreen 警告，没有证书就老实写「未签名」。
 
 M6 已经落地的东西不要重做：`electron/main/researchView.ts`（`WebContentsView` + `persist:research` 分区 + 权限全拒 + bounds 归零隐藏）、`researchIpc.ts` 八个通道、`src/data/researchUrl.ts`（URL/搜索词归一 + 8 个单测）、`ResearchSidebar` 的矩形上报（`ResizeObserver` + `window.resize`）。**原生视图不属 DOM**，别想着用 CSS 控制它；也别给它挂 preload。

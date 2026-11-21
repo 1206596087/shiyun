@@ -29,6 +29,9 @@
 | TypeScript | https://github.com/microsoft/TypeScript | 类型检查 | Apache-2.0 |
 | Vitest | https://github.com/vitest-dev/vitest | 单元测试 | MIT |
 | oxlint | https://github.com/oxc-project/oxc | Lint | MIT |
+| electron-builder | https://github.com/electron-userland/electron-builder | 生成 Windows NSIS 安装包（M7） | MIT |
+| NSIS（由 electron-builder 下载） | https://nsis.sourceforge.io/ | 安装器打包器（构建期工具） | zlib/libpng |
+| 7-Zip（`7zip-bin`，仅本地准备缓存时用） | https://www.7-zip.org/ | 解压 electron-builder 的二进制缓存 | LGPL-2.1（含 unRAR 限制） |
 
 完整许可证文本随 npm 包保存在各自的 `node_modules/<package>/LICENSE*` 中；桌面软件打包时应将实际分发依赖的许可证聚合进安装包。Electron 打包（M7）时必须额外附带 `LICENSES.chromium.html`，这是 Chromium 二进制分发的强制性要求。
 

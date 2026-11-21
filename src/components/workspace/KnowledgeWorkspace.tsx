@@ -308,6 +308,30 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
     '--ws-right': state.rightVisible ? `${state.rightWidth}px` : '0px',
   } as CSSProperties
 
+  // 键盘快捷键：只在书房是当前空间时生效，输入框里的按键照旧交给输入框。
+  // Ctrl/Cmd+O 导入书籍、Ctrl/Cmd+B 开关右栏（研究栏）；其余组合键不动，避免抢系统快捷键。
+  const shortcutRef = useRef({ import: handleImport, toggleRight: () => update({ rightVisible: !state.rightVisible }) })
+  shortcutRef.current = { import: handleImport, toggleRight: () => update({ rightVisible: !state.rightVisible }) }
+
+  useEffect(() => {
+    if (!active) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key === 'o') {
+        event.preventDefault()
+        void shortcutRef.current.import()
+        return
+      }
+      if (key === 'b') {
+        event.preventDefault()
+        shortcutRef.current.toggleRight()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [active])
+
   return (
     <section
       className={`workspace-space ${active ? 'is-active' : 'is-inactive'} ${state.rightVisible ? 'has-research' : 'is-research-hidden'}`}

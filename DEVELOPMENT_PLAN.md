@@ -15,7 +15,7 @@
 | M4 | 划线、笔记、多对多关联 | ✅ 完成（桌面实机验证） |
 | M5 | 真实知识数据生成星图（GraphDataAdapter） | ✅ 完成（桌面实机验证） |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | ✅ 完成（桌面实机验证） |
-| M7 | 打磨、Windows 打包与发布 | 未开始 |
+| M7 | 打磨、Windows 打包与发布 | ✅ 安装包与打包流程完成（未签名、无自动更新） |
 
 ## M0 · 接管与基线
 
@@ -136,12 +136,23 @@ M5 已知限制：
 - 没有做「最近访问列表」与站点级权限记忆；每次启动从空白页开始（尚未持久化上次 URL）。
 - 网页视图复用同一个 `persist:research` 分区，不随空间销毁；关闭窗口时由 `disposeResearchView()` 回收。
 
-## M7 · 打磨与发布（下一步）
+## M7 · 打磨与发布（完成安装包，未签名）
 
-- [ ] 键盘可达性与焦点顺序、命令面板、快捷键。
-- [ ] 启动性能、首屏拆包、内存占用（银河与书房并存）。
-- [ ] `electron-builder` Windows NSIS 安装包、签名、自动更新通道。
-- [ ] 崩溃与日志、用户反馈入口。
+- [x] 键盘可达性与焦点顺序、快捷键：书房内 `Ctrl/Cmd+O` 导入、`Ctrl/Cmd+B` 开关右栏；标签 `role="tab"` + `aria-selected`；全局 `:focus-visible` 焦点环。
+- [x] 启动与崩溃：主进程 `logging.ts` 记录启动信息、`uncaughtException`（写日志 + 可读错误框）、`render-process-gone`、`unresponsive`；日志在 `%APPDATA%\shiyun\logs\`。
+- [x] `electron-builder` Windows NSIS 安装包：`release/Shiyun-0.1.0-win-x64.exe`（164 MB）、`latest.yml`、`blockmap`；`release/` 已忽略；`dist:offline` 用本地 `node_modules/electron/dist` 打包（GitHub 不可达时可用）。
+- [x] 应用图标 `build/icon.ico`（7 尺寸，`scripts/build-icon.mjs` 生成），安装器与 `诗云.exe` 都已带上。
+- [x] 数据目录钉死 `%APPDATA%\shiyun`（`app.setPath('userData', …)`），开发版与安装版共用一份书库；升级/卸载都不动书库。
+- [x] 安装包实机验证：`win-unpacked/诗云.exe` 启动后六个桌面能力齐全，`listTree()` 读到 5 本书 / 20 划线 / 10 笔记，`pdfjs/cmaps` 200，星图投影 36 节点 / 71 关系。
+- [ ] 代码签名证书：没有证书，安装器未签名，首次运行会被 SmartScreen 拦一次。
+- [ ] 自动更新：只产出 `latest.yml`，`autoUpdater` 与发布通道尚未接线。
+- [ ] 便携版 / arm64 / 多语言安装界面：未做。
+
+## M7 已知限制
+
+- 安装包 164 MB，主要体积是 Electron 本体与 PDF.js worker；没有做按需下载或裁剪。
+- 首次渲染仍是整包加载（`index-*.js` 约 5.6 MB），未做路由级拆包；M8 若继续可先拆 `pdfjs-dist` 与 `epubjs`。
+- 日志只保留按天文件，没有滚动清理与「导出诊断包」入口。
 
 ## 验收流程（来自需求文档，逐条可复验）
 

@@ -4,6 +4,28 @@
 
 ---
 
+## ADR-018 · 用 electron-builder 出 NSIS 安装包，数据目录钉死 `%APPDATA%\shiyun`
+
+**背景**：M7 要交付一个能双击装的 Windows 版本。可选 electron-builder（NSIS/MSI/portable，生态最全、与 electron-vite 常见搭配）或 electron-forge（maker 体系更"官方"，但 NSIS 定制麻烦）。同时有两个打包特有的坑：打包后 `app.getName()` 会从 `shiyun` 变成 `productName`（「诗云」），默认 userData 目录随之改变；打包器默认会去 GitHub 下载 Electron 发行包，在部分网络里会卡满 10 分钟再失败。
+
+**决策**：
+- 用 `electron-builder` 26 + NSIS（`oneClick: false`、允许改安装目录、建桌面/开始菜单快捷方式），产物固定 `release/Shiyun-<version>-win-x64.exe`，`release/` 加入 `.gitignore`。
+- **数据目录显式钉死**：主进程在 `whenReady` 之前执行 `app.setPath('userData', join(app.getPath('appData'), 'shiyun'))`。开发模式、`win-unpacked`、安装版因此共用同一份书库；升级覆盖安装与卸载都不删数据。
+- 图标由仓库内脚本生成（`build/icon-*.png` → `scripts/build-icon.mjs` → `build/icon.ico`），不引图像依赖；`buildResources` 指向 `build/`。
+- 打包不重编原生模块（`npmRebuild: false`）——书库用内置 `node:sqlite`，没有任何原生 `.node` 需要处理。
+- 提供 `pack` / `dist` 与 `pack:offline` / `dist:offline`：后者带 `-c.electronDist=node_modules/electron/dist`，直接用已装好的 Electron 目录，绕开 GitHub 下载。
+- 未配置签名证书（`CSC_IDENTITY_AUTO_DISCOVERY=false`），安装器老实标注「未签名」；自动更新只产出 `latest.yml` 元数据，未接 `autoUpdater`。
+
+**理由**：NSIS 是 Windows 上最不容易被用户误解的安装方式，`electron-builder` 一条命令能同时给出免安装目录与安装器，便于「先验证再交付」。数据目录钉死是数据安全决策，不是配置洁癖：一旦 userData 跟着 productName 变，用户会以为书和划线全丢了。
+
+**代价 / 何时重新评估**：
+- 安装包 164 MB 未签名，首次运行有 SmartScreen 提示；有证书后应补签名（`win.certificateFile` / CI 里注入）。
+- 自动更新需要发布通道（GitHub Releases 或自建），接线时把 `publish` 配好并在主进程 `autoUpdater` 里加提示 UI。
+- 目前只有 x64 与 NSIS 目标；需要便携版或 arm64 时在 `build.win.target` 里加，不影响其他决策。
+- `dist:offline` 依赖本机 `node_modules/electron/dist` 与 `%LOCALAPPDATA%\electron-builder\Cache`（`winCodeSign` / `nsis` / `nsis-resources`）已就绪；换机器要先按 AGENTS §7 准备这两处。
+
+---
+
 ## ADR-017 · 右栏用主进程 `WebContentsView` 承载真实网页，渲染进程只报矩形
 
 **背景**：需求要求右栏是「真实可用的内嵌浏览器」，不是假面板。可选方案：(a) 渲染进程用 `<webview>` 标签；(b) `<iframe>`；(c) 主进程 `WebContentsView` 挂在窗口上。`<webview>` 已被 Electron 标记为不推荐、且需要额外开关；`iframe` 对多数站点会被 `X-Frame-Options`/CSP 拒绝，还和书房共享同一个渲染进程与安全边界。

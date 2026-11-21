@@ -16,6 +16,9 @@ out
 # PDF.js 运行时资产（由 scripts/copy-pdfjs-assets.mjs 从 node_modules 生成）
 public/pdfjs
 
+# electron-builder 产物（安装包 160MB+，不进版本库；用 npm run dist 现场生成）
+release
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
