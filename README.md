@@ -235,6 +235,13 @@ docs/screenshots/       # README 截图
 | [DECISIONS.md](./DECISIONS.md) | 技术选型与取舍记录 |
 | [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) | 依赖许可证与参考项目 |
 | [AGENTS.md](./AGENTS.md) | 给后续开发者 / AI 代理的工作约定 |
+| [LICENSE](./LICENSE) | 项目自身的许可证（MIT） |
+
+## 许可证
+
+诗云以 **MIT 许可证**发布，全文见 [LICENSE](./LICENSE)。你可以自由地使用、修改、分发，甚至用于闭源商业项目，条件是保留版权声明与许可声明；软件按「现状」提供，不附带任何担保。
+
+第三方依赖（Electron、React、Three.js、PDF.js、EPUB.js、TipTap 等）各有自己的许可证，逐项列在 [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。分发打包版本时，还需随附 Electron 的 `LICENSES.chromium.html`（安装包里已经带了）。
 
 ## 开源与参考
 

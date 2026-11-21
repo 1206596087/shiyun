@@ -4,6 +4,24 @@
 
 ---
 
+## ADR-019 · 项目自身用 MIT 许可证发布
+
+**背景**：仓库在 GitHub 上公开，但根目录只有 `THIRD_PARTY_LICENSES.md`（记录依赖的授权），没有项目自己的 `LICENSE`。**公开可见不等于授权**：没有许可证时，默认的著作权规则是「保留所有权利」，别人不能合法地复用、修改、分发这份代码，想用的人只能提 issue 问。所以要么明确选一个许可证，要么在 README 里写清楚「仅供阅读」。
+
+**决策**：
+- 根目录新增 `LICENSE`（MIT），`package.json` 加 `"license": "MIT"`，README 增加「许可证」小节并把 `LICENSE` 列进文档索引。
+- `THIRD_PARTY_LICENSES.md` 开头点明「项目自身是 MIT，本文只列第三方」，避免两份文档的职责混淆。
+- `AGENTS.md` §6 增加一条准入规则：新增会随应用分发的依赖必须登记；**不要往运行时引入 GPL/AGPL 依赖**，因为那会让整个分发物的授权性质改变（要做就得先写 ADR）。
+
+**理由**：这个项目的定位是「个人知识管理工具 + 给后来者参考的完整实现」，最需要的是**别人能直接拿去改、拿去用、拿去学**。MIT 的约束最少（保留版权与许可声明即可），和现有依赖的授权也相容（Electron/Chromium 是 MIT+BSD 类、React/Three/PDF.js/EPUB.js/TipTap 分别是 MIT/Apache-2.0/BSD-2-Clause/MIT，没有一个要求传染性开源）。GPL-3.0 的差别在于「改进版本必须继续开源」——如果后续希望所有衍生作品回流社区，那时可以换 GPL-3.0；但在还没有外部贡献者时，换许可证是项目所有者单方面可以做的干净操作，一旦收过别人的贡献就会变成需要全体同意的事，所以此刻先选宽松的、把选择权留着更稳妥。
+
+**代价 / 何时重新评估**：
+- MIT 允许别人把改进做成闭源产品而不回报；若不接受这一点，改为 GPL-3.0（或 AGPL-3.0，覆盖「做成网络服务」的场景）需要重写 `LICENSE` 并在 README/DECISIONS 里改口，同时通知已有贡献者。
+- 许可证只覆盖**代码**：`docs/screenshots/` 里的截图、`build/icon.ico` 等资产默认也随 MIT 授权，若希望保留某些品牌资产的权利，需要单独写明（目前没有这个需求）。
+- 若将来接入带 GPL 的库（例如某些 PDF 渲染器或词典数据），要先按本 ADR 的约束评估，再决定是否改变项目许可。
+
+---
+
 ## ADR-018 · 用 electron-builder 出 NSIS 安装包，数据目录钉死 `%APPDATA%\shiyun`
 
 **背景**：M7 要交付一个能双击装的 Windows 版本。可选 electron-builder（NSIS/MSI/portable，生态最全、与 electron-vite 常见搭配）或 electron-forge（maker 体系更"官方"，但 NSIS 定制麻烦）。同时有两个打包特有的坑：打包后 `app.getName()` 会从 `shiyun` 变成 `productName`（「诗云」），默认 userData 目录随之改变；打包器默认会去 GitHub 下载 Electron 发行包，在部分网络里会卡满 10 分钟再失败。

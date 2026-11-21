@@ -67,6 +67,8 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 
 文档里的"计划"与"已实现"必须一眼可区分。没实现的写"计划中"。
 
+**许可证相关**：项目以 MIT 发布（根目录 `LICENSE`）。如果新增了会随应用分发的第三方组件，必须在 `THIRD_PARTY_LICENSES.md` 里登记；**不要引入 GPL/AGPL 依赖到运行时**（MIT 项目可以，但会迫使整个分发物按 GPL 授权，那是一次改变项目性质的决策，要先写进 `DECISIONS.md`）。只用于构建/本地工具的依赖写进「构建与开发依赖」表即可。
+
 ## 7. 环境事实（2026-11-21 实测）
 
 - 工作目录：`C:\Users\admin\Desktop\awa\poetry cloud`。

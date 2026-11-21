@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "诗云 · 个人知识宇宙 —— 把书、划线与笔记放进同一片星空",
   "author": "Shiyun",
+  "license": "MIT",
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
