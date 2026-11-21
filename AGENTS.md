@@ -103,7 +103,12 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 
 ## 8. 下一步建议
 
-M6 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：右栏现在是诚实的占位（输入框 disabled、写明 M6 才接），M6 要把它换成真的 `WebContentsView`。顺序建议：先在主进程建 `WebContentsView` 并让它跟随右栏矩形（宽度拖拽、隐藏、窗口缩放都要同步 bounds），再做地址栏 / 前进后退 / 刷新 / 外部打开，最后收紧权限（摄像头、麦克风、地理位置、通知、下载默认拒绝，跨站导航给提示）。注意三件事：`WebContentsView` 不属于 DOM，必须由主进程设置 bounds，渲染进程只能通过 IPC 请求「打开某 URL」；它和书房的三栏拖拽是两套坐标系，缩放时容易错位，要用 `ResizeObserver` + IPC 同步；所有权限请求集中在 `session.setPermissionRequestHandler`，别散落在渲染层。
+M7 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：打磨交互（键盘可达性与焦点顺序、快捷键、命令面板）+ 出 Windows 安装包（`electron-builder` NSIS）+ 崩溃日志。打包前必读三件事：1) `node:sqlite` 是 Electron 内置模块，**不要**让打包器去 `asar` 外找原生 `.node`（没有原生模块要 unpack，`asar` 保持默认）；2) `public/pdfjs/` 是构建期复制的运行资产，打包 config 的 `files`/`extraResources` 必须把它带上，否则中文 PDF 变方块；3) 数据目录是 `%APPDATA%\shiyun`，升级安装不能清它，卸载也不该删（要在文档里写明备份路径）。另外 `electron-builder` 需要签名证书才能免 SmartScreen 警告，没有证书就老实写「未签名」。
+
+M6 已经落地的东西不要重做：`electron/main/researchView.ts`（`WebContentsView` + `persist:research` 分区 + 权限全拒 + bounds 归零隐藏）、`researchIpc.ts` 八个通道、`src/data/researchUrl.ts`（URL/搜索词归一 + 8 个单测）、`ResearchSidebar` 的矩形上报（`ResizeObserver` + `window.resize`）。**原生视图不属 DOM**，别想着用 CSS 控制它；也别给它挂 preload。
+
+M6 的实测口径（复验时照做）：`electron.exe . --remote-debugging-port=<port>`，用 CDP 连应用页 → 进书房 → `window.shiyunDesktop.research.getState()` → `navigate('https://example.com/')` → 等 `loading:false` → 从 `http://127.0.0.1:<port>/json` 里找那个 http 页 target，量它的 `innerWidth/innerHeight`，应与 `.research-view` 的矩形相差不超过 2px（边框）。
+
 
 M5 已经落地的东西不要重做：`src/data/graphProjection.ts`（纯函数投影 + 9 个单测）、`electron/main/db/graph.ts`（读源 + 回填坐标）、`graphIpc.ts` 三个通道、`src/data/graphBridge.ts`（桌面 / 浏览器双实现）、`KnowledgeLayer` 的拖拽与 `CameraController` 的 `disabled`。**银河里的点只能来自书库实体**，不要为了「演示好看」在渲染进程里造节点（ADR-016）。
 

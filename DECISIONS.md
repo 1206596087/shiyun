@@ -4,6 +4,26 @@
 
 ---
 
+## ADR-017 · 右栏用主进程 `WebContentsView` 承载真实网页，渲染进程只报矩形
+
+**背景**：需求要求右栏是「真实可用的内嵌浏览器」，不是假面板。可选方案：(a) 渲染进程用 `<webview>` 标签；(b) `<iframe>`；(c) 主进程 `WebContentsView` 挂在窗口上。`<webview>` 已被 Electron 标记为不推荐、且需要额外开关；`iframe` 对多数站点会被 `X-Frame-Options`/CSP 拒绝，还和书房共享同一个渲染进程与安全边界。
+
+**决策**：
+- 主进程 `electron/main/researchView.ts` 创建 `WebContentsView`，`win.contentView.addChildView(view)`，独立分区 `persist:research`，`sandbox:true`、`contextIsolation:true`、`nodeIntegration:false`，**不挂 preload**（网页拿不到任何桌面 API）。
+- 渲染进程的 `.research-view` 只是占位矩形，`ResearchSidebar` 用 `ResizeObserver` + `window.resize` 把 `getBoundingClientRect()` 报给 `research:setBounds`，主进程用 `win.getContentSize()` 夹一遍再 `setBounds`。
+- 切空间 / 隐藏右栏时 `setVisible(false)` → `setBounds({0,0,0,0})`，但 `WebContents` 保留（不销毁）。
+- 权限一律拒绝：`setPermissionRequestHandler(cb => cb(false))`、`setPermissionCheckHandler(() => false)`、`will-download` 阻止；`setWindowOpenHandler` 拒绝并把 http(s) 转 `shell.openExternal`；`will-navigate` 拦非 http(s)。
+- 地址栏输入由纯函数 `src/data/researchUrl.ts` 归一：完整 URL 直连、裸域名补 `https://`、其余走 Bing 搜索，`file:` / `shiyun-book:` / `javascript:` 一律降级成搜索词。
+
+**理由**：原生视图是唯一能真正加载任意站点、又与外层应用完全隔离的选项；不挂 preload 意味着即使网页被攻破也拿不到 `window.shiyunDesktop`；矩形上报而不是让渲染进程算坐标，避免两套坐标系互相污染。
+
+**代价 / 何时重新评估**：
+- 原生视图不进入 DOM：不吃书房的 CSS，也不被 DOM 截图工具拍到（README 的截图是把它自己的截图贴回矩形）；M7 若要「网页跟随阅读进度滚动」需要另设通道。
+- 右栏窄（默认 294px）时桌面版网站会横向溢出，属站点排版问题；若用户反馈强烈，M7 可加「移动版链接」或建议宽度。
+- 目前不持久化上次访问 URL，也没有站点级权限记忆；需要时在主进程加 `app_settings` 键即可，不必改协议。
+
+---
+
 ## ADR-016 · 星图由书库投影（纯函数 + 坐标表），不在渲染进程里造知识
 
 **背景**：M5 要让银河显示真实的知识。三条路可选：渲染进程直接读 SQLite、主进程把实体塞进 `KnowledgeGraphData`、或者让界面自己从实体算坐标。同时要满足「拖动后固定」「双击回原文」「大库不卡死」。

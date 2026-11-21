@@ -9,6 +9,7 @@ import type {
   UpdateNoteInput,
 } from '../../src/types/annotation.ts'
 import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
+import type { ResearchBounds, ResearchState } from '../../src/types/research.ts'
 
 export interface LibraryMeta {
   dataDir: string
@@ -69,12 +70,27 @@ export interface ShiyunGraphApi {
   unpin: (nodeId: string) => Promise<boolean>
 }
 
+/** 研究栏（M6）：只上报矩形与导航意图，真正的 WebContentsView 在主进程里。 */
+export interface ShiyunResearchApi {
+  ensure: () => Promise<ResearchState | null>
+  setBounds: (bounds: ResearchBounds) => Promise<ResearchState | null>
+  setVisible: (visible: boolean) => Promise<ResearchState | null>
+  navigate: (url: string) => Promise<ResearchState | null>
+  back: () => Promise<ResearchState | null>
+  forward: () => Promise<ResearchState | null>
+  reload: () => Promise<ResearchState | null>
+  getState: () => Promise<ResearchState | null>
+  /** 主进程推来的导航状态（加载完成、标题变化、出错）。返回取消订阅函数。 */
+  onState: (listener: (state: ResearchState) => void) => () => void
+}
+
 export interface ShiyunDesktopApi {
   getRuntimeInfo: () => Promise<{ platform: string; version: string; electron: string }>
   openExternal: (url: string) => Promise<void>
   library: ShiyunLibraryApi
   annotations: ShiyunAnnotationApi
   graph: ShiyunGraphApi
+  research: ShiyunResearchApi
 }
 
 const library: ShiyunLibraryApi = {
@@ -116,12 +132,31 @@ const graph: ShiyunGraphApi = {
   unpin: (nodeId) => ipcRenderer.invoke('graph:unpin', { nodeId }),
 }
 
+const research: ShiyunResearchApi = {
+  ensure: () => ipcRenderer.invoke('research:ensure'),
+  setBounds: (bounds) => ipcRenderer.invoke('research:setBounds', bounds),
+  setVisible: (visible) => ipcRenderer.invoke('research:setVisible', visible),
+  navigate: (url) => ipcRenderer.invoke('research:navigate', url),
+  back: () => ipcRenderer.invoke('research:back'),
+  forward: () => ipcRenderer.invoke('research:forward'),
+  reload: () => ipcRenderer.invoke('research:reload'),
+  getState: () => ipcRenderer.invoke('research:state'),
+  onState: (listener) => {
+    const handler = (_event: unknown, state: ResearchState) => listener(state)
+    ipcRenderer.on('research:state', handler)
+    return () => {
+      ipcRenderer.removeListener('research:state', handler)
+    }
+  },
+}
+
 const desktopApi: ShiyunDesktopApi = {
   getRuntimeInfo: () => ipcRenderer.invoke('app:get-runtime-info'),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   library,
   annotations,
   graph,
+  research,
 }
 
 contextBridge.exposeInMainWorld('shiyunDesktop', desktopApi)

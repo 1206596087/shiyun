@@ -198,3 +198,19 @@ export function IconTrash(props: IconProps) {
     </Icon>
   )
 }
+
+export function IconBack(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14.4 5.4 7.8 12l6.6 6.6" />
+    </Icon>
+  )
+}
+
+export function IconForward(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9.6 5.4 16.2 12l-6.6 6.6" />
+    </Icon>
+  )
+}

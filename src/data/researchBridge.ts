@@ -1,0 +1,45 @@
+import type { ResearchBounds, ResearchState } from '../types/research.ts'
+
+/**
+ * 研究栏的渲染侧桥接。
+ *
+ * 桌面版：真正干活的是主进程里的 `WebContentsView`，这里只上报矩形和导航意图。
+ * 浏览器版（`npm run dev:web`）：没有主进程，返回 `null`，界面会显示「需要桌面版」的说明，
+ * 而不是假装有个浏览器。
+ */
+
+export type ResearchMode = 'desktop' | 'demo'
+
+export interface ResearchBridge {
+  mode: ResearchMode
+  ensure: () => Promise<ResearchState | null>
+  setBounds: (bounds: ResearchBounds) => Promise<ResearchState | null>
+  setVisible: (visible: boolean) => Promise<ResearchState | null>
+  navigate: (url: string) => Promise<ResearchState | null>
+  back: () => Promise<ResearchState | null>
+  forward: () => Promise<ResearchState | null>
+  reload: () => Promise<ResearchState | null>
+  getState: () => Promise<ResearchState | null>
+  onState: (listener: (state: ResearchState) => void) => () => void
+}
+
+const noop = async () => null
+
+const demoBridge: ResearchBridge = {
+  mode: 'demo',
+  ensure: noop,
+  setBounds: noop,
+  setVisible: noop,
+  navigate: noop,
+  back: noop,
+  forward: noop,
+  reload: noop,
+  getState: noop,
+  onState: () => () => undefined,
+}
+
+export function getResearchBridge(): ResearchBridge {
+  const api = window.shiyunDesktop?.research
+  if (!api) return demoBridge
+  return { mode: 'desktop', ...api }
+}

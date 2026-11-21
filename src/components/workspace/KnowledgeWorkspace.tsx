@@ -392,7 +392,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
               aria-label="调整网页研究栏宽度"
               onPointerDown={(event) => beginResize('right', event)}
             />
-            <ResearchSidebar />
+            <ResearchSidebar active={active} visible={state.rightVisible} />
           </>
         )}
       </div>

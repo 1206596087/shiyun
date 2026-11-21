@@ -147,6 +147,27 @@ App boot ── getGraphBridge().load() ── graphBridge ── ipcRenderer �
 - **星图是缓存，不是真相**：书库变了星图就旧了，所以从书房回银河会重新 `load()`（`refreshGraph()`），Explorer 也有「刷新星图」按钮。
 - **拖动与相机抢指针**：拖动期间把 `OrbitControls.enabled` 置 false（`CameraController` 的 `disabled` prop），否则拖星星会同时旋转相机；平面求交用 `THREE.Plane(new Vector3(0,1,0), -y)` 保持在同一水平面内移动。
 
+## 3.5 内嵌网页研究栏数据流（M6）
+
+```text
+渲染进程（ResearchSidebar）                        preload            主进程
+.workspace-grid 里的 .research-view 只是一个空矩形
+  ├ ResizeObserver / window.resize ── report() ── research.setBounds ──> researchIpc.parseBounds（夹进内容区）
+  │                                                                      └ researchView.setResearchBounds → WebContentsView.setBounds
+  ├ active && rightVisible ── research.setVisible ───────────────────────> researchView.setResearchVisible
+  │                                                                         └ visible=false 或尺寸<40 → setBounds(0,0,0,0)
+  ├ 地址栏 Enter ── toNavigableUrl(draft) ── research.navigate(url) ────> WebContentsView.webContents.loadURL
+  └ research.onState(handler) ←── ipcRenderer.on('research:state') ←── pushState()（did-navigate / 标题 / loading）
+```
+
+要点：
+
+- **原生视图不属 DOM**：`WebContentsView` 是 Chromium 的独立视图，由主进程 `addChildView` 挂在窗口上，位置是世界坐标。它不吃书房 CSS，也不会被 DOM 截图工具拍到，所以渲染进程只负责「报矩形 + 报告状态」，不参与绘制。
+- **两套坐标系**：右栏矩形来自 `getBoundingClientRect()`（CSS px，相对渲染进程视口），主进程再用 `win.getContentSize()` 夹一遍，避免把视图摆到标题栏或窗口外；拖栏宽是 7px 手柄的 pointer 事件，与视图 bounds 之间只靠 `ResizeObserver` 解耦。
+- **网页没有桌面能力**：视图不挂 preload，`sandbox:true`、`contextIsolation:true`、`nodeIntegration:false`，权限请求与下载在主进程一律拒绝，`window.open` 转系统浏览器，非 http(s) 导航拦截；地址栏也拒绝 `file:` / `shiyun-book:` / `javascript:`（降级成搜索词）。
+- **隐藏而不是销毁**：切到银河时只把 bounds 归零（`visible:false`），`WebContents` 保留，回书房时立即可用；窗口关闭才 `disposeResearchView()`。
+- **浏览器模式降级**：没有 `window.shiyunDesktop.research` 时 `getResearchBridge()` 返回全 no-op 的桥，面板显示「右侧网页在桌面版里是真实网页」并给外部浏览器出口（ADR-017）。
+
 ## 4. 书房结构
 
 ```text

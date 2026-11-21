@@ -29,7 +29,11 @@
 
 ![从银河双击星点回到第 2 页](docs/screenshots/workspace-from-galaxy.png)
 
-> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）；第六张是选中正文划出的金色划线，第七张是划线带出来的三栏式笔记编辑器（标题可留空，正文自动保存，下方列出关联划线），第八张是关掉 EPUB 再重新打开后，靠 CFI 复原的划线；第九张是同一份书库投影出来的星图（状态条写明「书库投影 38 个知识节点 73 条关系」），第十张是点中一颗划线星后的检查面板（`page 2` 与「回到这段原文」），第十一张是从银河双击那颗星回到书里第 2 页、划线仍在原位。
+![右栏的真实内嵌网页](docs/screenshots/research-panel.png)
+
+> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）；第六张是选中正文划出的金色划线，第七张是划线带出来的三栏式笔记编辑器（标题可留空，正文自动保存，下方列出关联划线），第八张是关掉 EPUB 再重新打开后，靠 CFI 复原的划线；第九张是同一份书库投影出来的星图（状态条写明「书库投影 38 个知识节点 73 条关系」），第十张是点中一颗划线星后的检查面板（`page 2` 与「回到这段原文」），第十一张是从银河双击那颗星回到书里第 2 页、划线仍在原位，第十二张是右栏内嵌的**真实网页**（主进程 `WebContentsView`，地址栏、前进后退、刷新都可用）。
+>
+> 第十二张说明：`WebContentsView` 是原生视图，不进入 DOM，所以那张图把该视图自己的截图贴回了它所在的矩形；除此之外整张图就是应用截图。
 
 ## 当前进度
 
@@ -41,8 +45,8 @@
 | M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放、阅读进度） | 完成（桌面实机验证） |
 | M4 | 划线、笔记、多对多关联 | 完成（桌面实机验证） |
 | M5 | 真实知识库生成星图（GraphDataAdapter） | 完成（桌面实机验证） |
-| M6 | 右侧真实内嵌浏览器（WebContentsView） | 下一步 |
-| M7 | 打磨、Windows 打包、自动更新 | 未开始 |
+| M6 | 右侧真实内嵌浏览器（WebContentsView） | 完成（桌面实机验证） |
+| M7 | 打磨、Windows 打包、自动更新 | 下一步 |
 
 细节见 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)。任何"未实现"的界面元素都在 UI 中显式标注「开发中 / Mx 接入」，不使用静态假功能冒充已完成功能。
 
@@ -139,6 +143,15 @@ npm run build:web   # 纯网页构建
 - 在书房里新划线后再回银河，星图会自动重新投影（右上「刷新星图」也可手动刷），左栏「我的划线 / 我的笔记」数字是问注释层要的实时值。
 - 超过 5000 个节点时先把每本书的划线聚合成一个星团，仍超限才隐藏笔记（会被报告出来），避免 3D 场景卡死。
 
+### 右栏真实内嵌网页（M6）
+
+- 右栏不再是占位：主进程用 `WebContentsView` 建了一个**独立的浏览器视图**（`electron/main/researchView.ts`），独立分区 `persist:research`、`sandbox: true`、`contextIsolation: true`、`nodeIntegration: false`、**不挂 preload**——网页拿不到任何桌面 API。
+- 视图不是 DOM 节点，所以渲染进程只负责报矩形：`ResearchSidebar` 用 `ResizeObserver` + `window.resize` 把 `.research-view` 的 `getBoundingClientRect()` 报给主进程，拖右栏宽度、开关右栏、切空间都会跟着走；隐藏时把 bounds 设成 `0,0,0,0`，避免它浮在银河上面。
+- 地址栏接受三类输入（`src/data/researchUrl.ts` 纯函数）：完整网址、像域名的裸串（补 `https://`）、其余当搜索词走 Bing；`file:`、`shiyun-book:`、`javascript:` 一律降级成搜索词，不会让网页读到本地文件。
+- 后退 / 前进 / 刷新来自 `navigationHistory`，标题与 loading 由主进程推事件；`window.open` 被拦下并转系统浏览器，权限（摄像头、麦克风、定位、通知、剪贴板）全部默认拒绝，下载被 `preventDefault`。
+- 浏览器模式没有主进程，也不再假装：面板里写明「右侧网页在桌面版里是真实网页」，并给一个「在系统浏览器里搜索」的出口（ADR-017）。
+- 实机证据：同一份 `out/` 构建产物里，研究栏的页面视口是 262×568，右栏占位矩形是 262×570（差 2px 是边框），说明原生视图确实被摆在右栏里；回银河后 `visible:false`、再进书房恢复，`canGoBack` 随导航变化。
+
 ### Electron 外壳（M1）
 
 - `electron.vite.config.ts` 分别构建主进程、preload、渲染进程；preload 固定输出 CommonJS（`out/preload/index.js`），因为沙箱化 preload 不支持 ESM（ADR-009）。
@@ -156,6 +169,8 @@ electron/
 ├─ main/libraryIpc.ts   # library:* 通道注册与参数校验
 ├─ main/annotationIpc.ts # annotation:* 通道（划线、笔记、关联）
 ├─ main/graphIpc.ts     # graph:load / pin / unpin（星图投影与坐标固定）
+├─ main/researchView.ts # 右栏 WebContentsView 的生命周期、bounds 与权限
+├─ main/researchIpc.ts  # research:* 通道（导航、显隐、bounds）
 ├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态、划线笔记、星图投影读取
 ├─ preload/index.ts     # contextBridge 暴露的最小桌面 API
 scripts/
@@ -178,7 +193,9 @@ docs/screenshots/       # README 截图
 - 划线只有一种颜色可选（金色）；`highlights.color` 字段已支持 gold/rose/sage，界面还没做颜色选择器。
 - 划线浮层只按「第一条矩形」定位高亮框（多行选区显示为一个连续色块），PDF 多行划线的逐行矩形已经存了 `rects`，画面上等后续细化。
 - PDF 每次只渲染当前一页（没有连续滚动），大文档靠翻页；EPUB 的主题、双栏、滚动模式未提供，`scroll_ratio` 字段先占位。
-- 右侧「网页搜索」不是内嵌浏览器；输入框禁用到 M6 接入 `WebContentsView` 为止。
+- 右侧网页研究栏在桌面版里是真实浏览器视图（地址栏、前进后退、刷新、外部打开）；浏览器模式没有主进程，只显示说明与外部浏览器出口，不假装加载网页。
+- 研究栏默认 294px（可拖到 440px），桌面版网站（Bing、维基桌面版）在这个宽度里会横向溢出——这是网站自己的排版，界面没有做缩放伪装；把右栏拖宽或直接打开移动版链接都可读。
+- 网页视图不进入 DOM，所以它不吃书房的 CSS，也不会被 DOM 截图工具拍到（README 里那张图是把该视图的截图贴回它所在的矩形）。
 - 回收站只有数据层接口（`restoreBook`），还没有界面；书库位置固定为 `%APPDATA%\shiyun`，未做自定义目录设置。
 - 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
 - 界面字体只用系统字体栈（原 Google Fonts `@import` 会在离线时把 `document.fonts.ready` 拖住，已移除）；中文若无系统字体再考虑自托管。

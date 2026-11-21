@@ -338,7 +338,19 @@
 .empty-desk button:hover { background: var(--ws-hover); }
 
 /* ── 右侧网页研究栏 ───────────────────────────────────────────── */
-.research-sidebar { min-width: 0; display: flex; flex-direction: column; padding: 24px 20px 16px; overflow-y: auto; }
+.research-sidebar { min-width: 0; display: flex; flex-direction: column; padding: 18px 16px 12px; overflow: hidden; }
+.research-nav { display: flex; align-items: center; gap: 2px; margin: 0 0 10px; }
+.research-nav button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 5px; color: #a8a39a; }
+.research-nav button:disabled { cursor: not-allowed; color: #cfcac0; }
+.research-nav__title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; margin: 0 0 0 8px; color: var(--ws-ink-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.research-view { position: relative; flex: 1; min-height: 0; margin-top: 12px; border: 1px solid var(--ws-line); border-radius: 8px; background: var(--ws-paper); overflow: hidden; }
+.research-view__demo { display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 18px 16px; overflow-y: auto; }
+.research-view__demo h3 { margin: 0; color: var(--ws-ink); font-size: 13px; font-weight: 500; }
+.research-view__demo p { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.9; }
+.research-view__demo code { padding: 1px 4px; border-radius: 3px; background: var(--ws-hover); font-size: 11.5px; }
+.research-view__demo button { align-self: flex-start; display: flex; align-items: center; gap: 6px; margin-top: auto; padding: 6px 8px; border: 1px solid var(--ws-line-strong); border-radius: 6px; color: var(--ws-ink-2); font-size: 12px; }
+.research-view__demo button:hover { background: var(--ws-hover); }
+.research-error { margin: 8px 0 0; color: #a8543f; font-size: 12px; }
 .research-sidebar__title { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; color: var(--ws-ink); font-size: 13.5px; }
 .research-input {
   display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px 0 12px;

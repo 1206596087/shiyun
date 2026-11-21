@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { registerAnnotationIpc } from './annotationIpc.ts'
 import { registerGraphIpc } from './graphIpc.ts'
 import { registerLibraryIpc } from './libraryIpc.ts'
+import { disposeResearchView } from './researchView.ts'
+import { registerResearchIpc } from './researchIpc.ts'
 import { closeLibrary, initLibrary, resolveBookFile } from './libraryService.ts'
 
 let mainWindow: BrowserWindow | null = null
@@ -112,6 +114,10 @@ function registerIpc() {
   registerLibraryIpc(assertTrustedSender)
   registerAnnotationIpc(assertTrustedSender)
   registerGraphIpc(assertTrustedSender)
+  registerResearchIpc((url) => {
+    assertTrustedSender(url ?? '')
+    return true
+  }, () => mainWindow)
 
   ipcMain.handle('app:get-runtime-info', (event) => {
     assertTrustedSender(event.senderFrame?.url ?? '')
@@ -147,7 +153,10 @@ function createWindow() {
   })
 
   mainWindow.once('ready-to-show', () => mainWindow?.show())
-  mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('closed', () => {
+    disposeResearchView()
+    mainWindow = null
+  })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://') || url.startsWith('http://')) void shell.openExternal(url)
     return { action: 'deny' }
