@@ -4,6 +4,26 @@
 
 ---
 
+## ADR-016 · 星图由书库投影（纯函数 + 坐标表），不在渲染进程里造知识
+
+**背景**：M5 要让银河显示真实的知识。三条路可选：渲染进程直接读 SQLite、主进程把实体塞进 `KnowledgeGraphData`、或者让界面自己从实体算坐标。同时要满足「拖动后固定」「双击回原文」「大库不卡死」。
+
+**决策**：
+- `src/data/graphProjection.ts` 是**纯函数**投影：输入 `GraphSource`（folders/books/highlights/notes/links/layouts），输出 `{graph, newLayouts, aggregatedHighlights, droppedNotes}`。不读数据库、不读时钟、随机抖动由 `hashText(id)` 派生，因此确定性、可单测（9 个用例）。
+- 主进程 `electron/main/db/graph.ts` 负责 IO：`loadGraphSource` → `projectKnowledgeGraph` → `persistLayouts`（新坐标以 `pinned=0` 写入）。
+- 渲染进程只有三个通道：`graph:load`、`graph:pin`、`graph:unpin`；**没有任何「新增节点」的入口**——银河里的每个点都必须来自书库实体。
+- 节点 id 带种类前缀（`book:` / `hl:` / `hlagg:` / `note:` / `topic:`），`graph_layouts.node_id` 存完整 id，并兼容原型迁移留下的裸实体 id。
+- 星图视为**缓存**：从书房回银河时重新 `load()`，Explorer 另有「刷新星图」。
+- 超过 5000 节点时按书聚合划线（`hlagg:`），仍超限才丢笔记并在返回值里报告（`droppedNotes`），不静默截断。
+
+**理由**：把「怎么排」和「从哪读」分开，投影可以脱离 Electron 单测；书库是唯一真相，星图只是视图，就不会出现「银河里存在但书库里没有」的幽灵节点（原型阶段的知识层和演示数据正是这个问题）。确定性布局让用户的空间记忆稳定，比每次力导向重排更好用。
+
+**代价**：不是力导向布局，增删节点后邻居不会自动重排；没有文件夹的书都挤在「未分类」星团；渲染进程拿到的是一份完整快照，节点规模大时 IPC 有一次性开销（靠聚合分支兜底）。
+
+**何时重新评估**：书库超过 5000 实体、或需要增量刷新（只推 diff）时，改成 `graph:load({since})` 的增量协议；若日后要做「手动布局 + 力导向混合」，保持投影纯函数、把物理模拟放在渲染侧即可。
+
+---
+
 ## ADR-015 · 划线用自绘叠加层，不依赖阅读引擎自带的标注层
 
 **背景**：M4 要把划线画回书页，并支持点开查看与跳转。EPUB.js 自带 `rendition.annotations.highlight()`，pdfjs 自带 `TextLayer` + 文本高亮思路，看似应该直接用。

@@ -10,6 +10,8 @@ interface Props {
   onCreateRelation: (type: string, description: string) => void
   onDeleteRelation: (id: string) => void
   onSelectNode: (id: string) => void
+  /** 把这本书 / 这条划线 / 这篇笔记送回书房原文（M5 验收 D）。 */
+  onOpenSource: (node: KnowledgeNode) => void
   onClose: () => void
 }
 
@@ -35,6 +37,15 @@ export function InspectorPanel(props: Props) {
           <dl>
             {Object.entries(props.selectedNode.metadata).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div>)}
           </dl>
+          {props.selectedNode.type !== 'topic' && (
+            <button className="source-button" onClick={() => props.onOpenSource(props.selectedNode!)}>
+              {props.selectedNode.type === 'book'
+                ? '在书房打开这本书'
+                : props.selectedNode.type === 'highlight'
+                  ? '回到这段原文'
+                  : '打开这篇笔记'}
+            </button>
+          )}
           <button className={`candidate-button ${props.relationCandidates.includes(props.selectedNode.id) ? 'active' : ''}`} onClick={() => props.onToggleCandidate(props.selectedNode!.id)}>
             {props.relationCandidates.includes(props.selectedNode.id) ? '✓ 已选为关系端点' : '＋ 选为关系端点'}
           </button>

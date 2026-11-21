@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Html, Line } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { KnowledgeGraphData, KnowledgeLink, KnowledgeNode, KnowledgeNodeType } from '../../types/knowledge'
 import type { ViewMode } from '../../types/galaxy'
@@ -14,6 +14,13 @@ interface Props {
   onSelectNode: (id: string) => void
   onSelectLink: (id: string) => void
   onFocusNode: (id: string) => void
+  /**
+   * 拖动一颗星（M5）：拖动过程中不断回报新坐标，松手时再回报最终坐标。
+   * 只有书库模式（桌面版）会传入，浏览器演示版仍走旧的「双击聚焦」。
+   */
+  onNodeDrag?: (id: string, position: [number, number, number]) => void
+  onNodeDragEnd?: (id: string, position: [number, number, number]) => void
+  onDragStateChange?: (dragging: boolean) => void
 }
 
 const NODE_STYLE: Record<KnowledgeNodeType, { color: string; emissive: string; size: number }> = {
@@ -41,12 +48,64 @@ function connectedSet(graph: KnowledgeGraphData, selectedId: string | null, dept
 
 export function KnowledgeLayer(props: Props) {
   const { graph, selectedNodeId, visibleTypes, mode } = props
+  const { camera, raycaster, gl } = useThree()
   const layoutMap = useMemo(() => new Map(graph.layouts.map((layout) => [layout.nodeId, layout])), [graph.layouts])
   const related = useMemo(() => connectedSet(graph, selectedNodeId, mode === 'focus' ? 2 : 1), [graph, mode, selectedNodeId])
   const activeLinkIds = useMemo(() => {
     if (!selectedNodeId) return new Set<string>()
     return new Set(graph.links.filter((link) => link.sourceId === selectedNodeId || link.targetId === selectedNodeId).map((link) => link.id))
   }, [graph.links, selectedNodeId])
+
+  const dragging = useRef<{ id: string; y: number; moved: boolean; last: [number, number, number] } | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const draggable = Boolean(props.onNodeDragEnd)
+
+  const beginDrag = (id: string) => {
+    if (!draggable) return
+    const layout = layoutMap.get(id)
+    if (!layout) return
+    dragging.current = { id, y: layout.y, moved: false, last: [layout.x, layout.y, layout.z] }
+    setDraggingId(id)
+    props.onDragStateChange?.(true)
+    document.body.style.cursor = 'grabbing'
+  }
+
+  // 拖动时用一条水平面接住指针：星星只在银盘平面里移动，不会飞出画面。
+  useEffect(() => {
+    if (!draggingId) return undefined
+    const handleMove = (event: PointerEvent) => {
+      const info = dragging.current
+      if (!info) return
+      const rect = gl.domElement.getBoundingClientRect()
+      const pointer = new THREE.Vector2(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      )
+      raycaster.setFromCamera(pointer, camera)
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -info.y)
+      const point = new THREE.Vector3()
+      if (!raycaster.ray.intersectPlane(plane, point)) return
+      info.moved = true
+      info.last = [point.x, info.y, point.z]
+      props.onNodeDrag?.(info.id, info.last)
+    }
+    const handleUp = () => {
+      const info = dragging.current
+      dragging.current = null
+      setDraggingId(null)
+      document.body.style.cursor = 'default'
+      props.onDragStateChange?.(false)
+      if (info?.moved) props.onNodeDragEnd?.(info.id, info.last)
+    }
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+    }
+  })
 
   return (
     <group>
@@ -83,8 +142,11 @@ export function KnowledgeLayer(props: Props) {
             selected={node.id === selectedNodeId}
             adjacent={related.has(node.id)}
             dimmed={dimmed}
+            dragging={node.id === draggingId}
+            draggable={draggable}
             onSelect={props.onSelectNode}
             onFocus={props.onFocusNode}
+            onDragStart={beginDrag}
           />
         )
       })}
@@ -141,16 +203,22 @@ function KnowledgeNodeMesh({
   selected,
   adjacent,
   dimmed,
+  dragging,
+  draggable,
   onSelect,
   onFocus,
+  onDragStart,
 }: {
   node: KnowledgeNode
   position: [number, number, number]
   selected: boolean
   adjacent: boolean
   dimmed: boolean
+  dragging: boolean
+  draggable: boolean
   onSelect: (id: string) => void
   onFocus: (id: string) => void
+  onDragStart: (id: string) => void
 }) {
   const [hovered, setHovered] = useState(false)
   const [near, setNear] = useState(false)
@@ -172,11 +240,16 @@ function KnowledgeNodeMesh({
         </mesh>
       )}
       <mesh
-        scale={selected ? 1.35 : hovered ? 1.18 : 1}
+        scale={dragging ? 1.42 : selected ? 1.35 : hovered ? 1.18 : 1}
+        onPointerDown={(event) => {
+          if (!draggable || node.type === 'topic') return
+          event.stopPropagation()
+          onDragStart(node.id)
+        }}
         onPointerOver={(event) => {
           event.stopPropagation()
           setHovered(true)
-          document.body.style.cursor = 'pointer'
+          document.body.style.cursor = draggable && node.type !== 'topic' ? 'grab' : 'pointer'
         }}
         onPointerOut={() => {
           setHovered(false)

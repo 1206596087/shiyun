@@ -103,6 +103,8 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 
 ## 8. 下一步建议
 
-M5 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：书库已经是权威数据源（`books` / `highlights` / `notes` / `knowledge_links` / `graph_layouts` 都有真实数据），所以 M5 的第一步是写 `GraphDataAdapter`——从 SQLite 读实体生成 `KnowledgeGraphData`，让银河显示真实的书、划线、笔记与主题，而不是 `mockKnowledge.ts` 的演示图谱。顺序建议：先只读投影（渲染真实节点、保留现有银河视觉），再做「银河节点双击 → 进书房 → 定位到该书/该划线原文」（验收 D），最后做坐标持久化与 >5000 节点聚合。禁止改动银河的粒子/星核/Bloom 代码来「顺手优化」，也禁止把知识身份挂到粒子上（ADR-001）。
+M6 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：右栏现在是诚实的占位（输入框 disabled、写明 M6 才接），M6 要把它换成真的 `WebContentsView`。顺序建议：先在主进程建 `WebContentsView` 并让它跟随右栏矩形（宽度拖拽、隐藏、窗口缩放都要同步 bounds），再做地址栏 / 前进后退 / 刷新 / 外部打开，最后收紧权限（摄像头、麦克风、地理位置、通知、下载默认拒绝，跨站导航给提示）。注意三件事：`WebContentsView` 不属于 DOM，必须由主进程设置 bounds，渲染进程只能通过 IPC 请求「打开某 URL」；它和书房的三栏拖拽是两套坐标系，缩放时容易错位，要用 `ResizeObserver` + IPC 同步；所有权限请求集中在 `session.setPermissionRequestHandler`，别散落在渲染层。
+
+M5 已经落地的东西不要重做：`src/data/graphProjection.ts`（纯函数投影 + 9 个单测）、`electron/main/db/graph.ts`（读源 + 回填坐标）、`graphIpc.ts` 三个通道、`src/data/graphBridge.ts`（桌面 / 浏览器双实现）、`KnowledgeLayer` 的拖拽与 `CameraController` 的 `disabled`。**银河里的点只能来自书库实体**，不要为了「演示好看」在渲染进程里造节点（ADR-016）。
 
 M4 已经落地的东西不要重做：划线定位（页码 + 归一化矩形 / CFI）、自绘叠加层、TipTap 笔记、`highlight_notes` 多对多、删除语义，都在 `annotations.ts` / `ReaderPane.tsx` / `NoteEditor.tsx` / `AnnotationLists.tsx` 里，有 36 个单测护着。

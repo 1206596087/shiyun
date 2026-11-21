@@ -10,9 +10,11 @@ const OVERVIEW_TARGET = new THREE.Vector3(0, 0, 0)
 interface Props {
   focusPosition: [number, number, number] | null
   resetToken: number
+  /** 拖动星星时临时关掉轨道控制，否则拖节点会同时旋转相机。 */
+  disabled?: boolean
 }
 
-export function CameraController({ focusPosition, resetToken }: Props) {
+export function CameraController({ focusPosition, resetToken, disabled = false }: Props) {
   const controls = useRef<OrbitControlsImpl>(null)
   const { camera, gl } = useThree()
   const desiredPosition = useRef(OVERVIEW_POSITION.clone())
@@ -56,6 +58,7 @@ export function CameraController({ focusPosition, resetToken }: Props) {
     <OrbitControls
       ref={controls}
       makeDefault
+      enabled={!disabled}
       enableDamping
       dampingFactor={0.055}
       minDistance={3}

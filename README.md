@@ -23,7 +23,13 @@
 
 ![EPUB 划线复原](docs/screenshots/highlight-epub.png)
 
-> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）；第六张是选中正文划出的金色划线，第七张是划线带出来的三栏式笔记编辑器（标题可留空，正文自动保存，下方列出关联划线），第八张是关掉 EPUB 再重新打开后，靠 CFI 复原的划线。
+![书库投影出的星图](docs/screenshots/galaxy-projected.png)
+
+![银河检查面板里的「回到这段原文」](docs/screenshots/galaxy-inspector-source.png)
+
+![从银河双击星点回到第 2 页](docs/screenshots/workspace-from-galaxy.png)
+
+> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）；第六张是选中正文划出的金色划线，第七张是划线带出来的三栏式笔记编辑器（标题可留空，正文自动保存，下方列出关联划线），第八张是关掉 EPUB 再重新打开后，靠 CFI 复原的划线；第九张是同一份书库投影出来的星图（状态条写明「书库投影 38 个知识节点 73 条关系」），第十张是点中一颗划线星后的检查面板（`page 2` 与「回到这段原文」），第十一张是从银河双击那颗星回到书里第 2 页、划线仍在原位。
 
 ## 当前进度
 
@@ -34,8 +40,8 @@
 | M2 | SQLite 书库、真实文件夹树、导入 PDF/EPUB | 完成（桌面实机验证） |
 | M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放、阅读进度） | 完成（桌面实机验证） |
 | M4 | 划线、笔记、多对多关联 | 完成（桌面实机验证） |
-| M5 | 真实知识库生成星图（GraphDataAdapter） | 下一步 |
-| M6 | 右侧真实内嵌浏览器（WebContentsView） | 未开始 |
+| M5 | 真实知识库生成星图（GraphDataAdapter） | 完成（桌面实机验证） |
+| M6 | 右侧真实内嵌浏览器（WebContentsView） | 下一步 |
 | M7 | 打磨、Windows 打包、自动更新 | 未开始 |
 
 细节见 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)。任何"未实现"的界面元素都在 UI 中显式标注「开发中 / Mx 接入」，不使用静态假功能冒充已完成功能。
@@ -124,6 +130,15 @@ npm run build:web   # 纯网页构建
 - 首次启动把 `localStorage` 里的原型图谱一次性搬进 SQLite：书籍 → `books`、笔记 → `notes`、划线 → `highlights`（页码缺失时归入「原型划线（原书未知）」并记账）、关系 → `knowledge_links`、坐标 → `graph_layouts`；旧键改名为 `shiyun-prototype-knowledge-v1.migrated` 保留，不覆盖用户数据。
 - 浏览器模式（`npm run dev:web`）没有 IPC，自动降级为内存演示书库，页脚会写明「演示书库 · 不会写入真实数据」。
 
+### 真实知识进入银河（M5）
+
+- 星图不再来自 `mockKnowledge.ts`：`src/data/graphProjection.ts` 把书库实体（文件夹 / 书 / 划线 / 笔记 / 关系 / 坐标）投影成 `KnowledgeGraphData`，主进程 `electron/main/db/graph.ts` 读 SQLite 后调用它，渲染进程经 `graph:*` 通道拿结果（ADR-016）。
+- 顶层文件夹各成一个星团，嵌套文件夹的书并到最上层祖先，没有文件夹的书落到「未分类」星团；同一份书库每次投影出的位置一致（确定性抖动），不是每次刷新都乱跳。
+- 拖动星星可以移动位置，松手写进 `graph_layouts`（`pinned=1`），重启后仍在原位；新增坐标以 `pinned=0` 落库，下次投影直接复用。
+- 点中一颗星，检查面板会显示它是哪本书的哪一页，双击直接进书房：书 → 打开书页，划线 → 跳到那一页（PDF）或那个 CFI（EPUB），笔记 → 打开笔记页。检查面板另有一个「回到这段原文 / 打开这篇笔记」按钮，走同一条路径。
+- 在书房里新划线后再回银河，星图会自动重新投影（右上「刷新星图」也可手动刷），左栏「我的划线 / 我的笔记」数字是问注释层要的实时值。
+- 超过 5000 个节点时先把每本书的划线聚合成一个星团，仍超限才隐藏笔记（会被报告出来），避免 3D 场景卡死。
+
 ### Electron 外壳（M1）
 
 - `electron.vite.config.ts` 分别构建主进程、preload、渲染进程；preload 固定输出 CommonJS（`out/preload/index.js`），因为沙箱化 preload 不支持 ESM（ADR-009）。
@@ -140,7 +155,8 @@ electron/
 ├─ main/libraryService.ts # 书库生命周期（打开/迁移/备份）与业务操作
 ├─ main/libraryIpc.ts   # library:* 通道注册与参数校验
 ├─ main/annotationIpc.ts # annotation:* 通道（划线、笔记、关联）
-├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态、划线笔记
+├─ main/graphIpc.ts     # graph:load / pin / unpin（星图投影与坐标固定）
+├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态、划线笔记、星图投影读取
 ├─ preload/index.ts     # contextBridge 暴露的最小桌面 API
 scripts/
 └─ copy-pdfjs-assets.mjs # 把 pdfjs 的 cmaps / standard_fonts 复制到 public/pdfjs
@@ -150,7 +166,7 @@ src/
 │  ├─ knowledge/        # 知识层：节点与关系渲染
 │  ├─ ui/               # 银河大厅的搜索、信息卡、调试面板、顶栏
 │  └─ workspace/        # 学习书房：头部、文件树、阅读区（PDF/EPUB）、笔记编辑器、划线/笔记列表、研究栏、图标
-├─ data/                # 知识仓储、书库桥接（桌面 IPC / 浏览器演示）、注释桥接、原型迁移
+├─ data/                # 知识仓储、书库桥接（桌面 IPC / 浏览器演示）、注释桥接、星图投影与星图桥接、原型迁移
 ├─ types/               # 银河、知识、书房 UI、书库、阅读器、划线笔记、Electron API 类型
 └─ utils/               # 确定性随机数
 docs/screenshots/       # README 截图
@@ -166,14 +182,15 @@ docs/screenshots/       # README 截图
 - 回收站只有数据层接口（`restoreBook`），还没有界面；书库位置固定为 `%APPDATA%\shiyun`，未做自定义目录设置。
 - 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
 - 界面字体只用系统字体栈（原 Google Fonts `@import` 会在离线时把 `document.fonts.ready` 拖住，已移除）；中文若无系统字体再考虑自托管。
-- 知识布局仍是确定性的银河簇布局，不运行全局力导向模拟；银河还没有读真实书库（M5 的 `GraphDataAdapter`）。
+- 星图坐标是确定性的伪随机布局（按文件夹分星团 + 抖动），不是力导向模拟：同一份书库两次投影一致，但增删节点后邻居不会自动重排。超过 5000 节点时的聚合星团分支在正常书库里看不到。
+- 没有文件夹的书全部落在「未分类」星团，视觉上是一个密集小星团——这是书库结构的真实反映，没有做美化。浏览器模式没有真实书库，星图仍是原型数据，状态条会写「浏览器存储」。
 
 ## 文档
 
 | 文档 | 内容 |
 | --- | --- |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 进程、分层、数据流、组件职责 |
-| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | SQLite 表结构、ID 策略、迁移与备份（M2 已实现 `001_init`） |
+| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | SQLite 表结构、ID 策略、迁移与备份（M2 已实现 `001_init`，M4 起划线笔记真实读写，M5 起 `graph_layouts` 真实读写） |
 | [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | M0–M7 目标、验收与当前进度 |
 | [DECISIONS.md](./DECISIONS.md) | 技术选型与取舍记录 |
 | [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) | 依赖许可证与参考项目 |

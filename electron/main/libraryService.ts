@@ -22,6 +22,7 @@ import { getReadingState, saveReadingState } from './db/reading.ts'
 import { pendingVersions, runMigrations } from './db/migrate.ts'
 import { resolveDataPaths, type DataPaths } from './db/paths.ts'
 import { importPrototypeGraph, prototypeImportState } from './db/prototypeImport.ts'
+import { loadKnowledgeGraph, releaseLayout, savePinnedLayout } from './db/graph.ts'
 import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
 
 let db: DatabaseSync | null = null
@@ -232,4 +233,28 @@ export function recordPageCount(bookId: string, pageCount: number): ReadingState
     updateBookMeta(connection, bookId, { pageCount: Math.round(pageCount) })
   }
   return getReadingState(connection, bookId)
+}
+
+/**
+ * 银河图：把书库投影成星图。
+ *
+ * 第一次投影会把自动生成的坐标落库（pinned = 0），之后只补新节点，
+ * 这样用户拖动固定过的星不会在重启后被冲掉。
+ */
+export function knowledgeGraph(): KnowledgeGraphData {
+  const { db: connection } = requireLibrary()
+  const { graph } = loadKnowledgeGraph(connection)
+  return graph
+}
+
+/** 用户拖动一颗星后固定坐标（pinned = 1）。 */
+export function pinGraphNode(nodeId: string, position: { x: number; y: number; z: number }): { nodeId: string; x: number; y: number; z: number } {
+  const { db: connection } = requireLibrary()
+  return savePinnedLayout(connection, nodeId, position)
+}
+
+/** 取消固定，回到自动布局。 */
+export function unpinGraphNode(nodeId: string): void {
+  const { db: connection } = requireLibrary()
+  releaseLayout(connection, nodeId)
 }

@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'e
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { registerAnnotationIpc } from './annotationIpc.ts'
+import { registerGraphIpc } from './graphIpc.ts'
 import { registerLibraryIpc } from './libraryIpc.ts'
 import { closeLibrary, initLibrary, resolveBookFile } from './libraryService.ts'
 
@@ -110,6 +111,7 @@ function assertTrustedSender(url: string) {
 function registerIpc() {
   registerLibraryIpc(assertTrustedSender)
   registerAnnotationIpc(assertTrustedSender)
+  registerGraphIpc(assertTrustedSender)
 
   ipcMain.handle('app:get-runtime-info', (event) => {
     assertTrustedSender(event.senderFrame?.url ?? '')

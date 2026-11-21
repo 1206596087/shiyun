@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { FileSidebar } from './FileSidebar'
 import { ReadingDesk } from './ReadingDesk'
 import { ResearchSidebar } from './BrowserSidebar'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { clampWidth, sanitizeWorkspaceUi } from './workspaceLayout'
-import { DEFAULT_WORKSPACE_UI, type WorkspaceTab, type WorkspaceUiState } from '../../types/workspace'
+import { DEFAULT_WORKSPACE_UI, type WorkspaceOpenTarget, type WorkspaceTab, type WorkspaceUiState } from '../../types/workspace'
 import type { KnowledgeGraphData } from '../../types/knowledge'
 import type { LibraryCounts, LibraryNodeKind, LibraryTree } from '../../types/library'
 import { getLibraryBridge, type LibraryBridge, type LibraryMode } from '../../data/libraryBridge'
@@ -48,9 +48,11 @@ interface Props {
   graph: KnowledgeGraphData
   onReturnGalaxy: () => void
   onOpenNode: (id: string) => void
+  /** 银河里双击一颗星后交给书房的目标（书籍 / 划线定位 / 笔记）。 */
+  openTarget?: WorkspaceOpenTarget | null
 }
 
-export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }: Props) {
+export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, openTarget }: Props) {
   const [state, setState] = useState(loadWorkspaceState)
   const [library, setLibrary] = useState<LibraryTree | null>(null)
   const [busy, setBusy] = useState(false)
@@ -205,13 +207,57 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
   const openLibraryList = (kind: 'highlights' | 'notes') => {
     openTab(kind === 'highlights' ? HIGHLIGHTS_TAB : NOTES_TAB)
     void refreshLibrary()
+    void recountAnnotations()
   }
+
+  /**
+   * 左栏的划线 / 笔记计数必须跟着真实写入走。
+   * 书库树里的 counts 是打开书库那一刻的快照，写一篇笔记或划一条线之后就不准了，
+   * 所以这里单独问注释层要一次数量。
+   */
+  const [annotationCounts, setAnnotationCounts] = useState<{ highlights: number; notes: number } | null>(null)
+  const recountAnnotations = useCallback(async () => {
+    try {
+      const [highlightList, noteList] = await Promise.all([annotations.listAllHighlights(), annotations.listNotes()])
+      setAnnotationCounts({ highlights: highlightList.length, notes: noteList.length })
+    } catch {
+      // 计数失败不影响主流程，保持上一次的数字
+    }
+  }, [annotations])
+  useEffect(() => {
+    void recountAnnotations()
+  }, [recountAnnotations])
 
   const retitleNote = (noteId: string, title: string) => {
     update({
       tabs: state.tabs.map((tab) => (tab.id === noteId && tab.kind === 'note' ? { ...tab, title } : tab)),
     })
   }
+
+  // 银河 → 书房：双击一颗星就打开对应的书 / 笔记，划线还要定位到页码或 CFI（验收 D）。
+  // 用 token 去重，避免重新渲染时把用户已经切走的标签又拉回来。
+  const handledTarget = useRef(0)
+  useEffect(() => {
+    if (!openTarget || openTarget.token === handledTarget.current) return
+    handledTarget.current = openTarget.token
+    if (openTarget.kind === 'note' && openTarget.noteId) {
+      void openNoteTab(openTarget.noteId)
+      return
+    }
+    const bookId = openTarget.bookId
+    if (!bookId) return
+    if (openTarget.kind === 'highlight') {
+      const focus: ReaderFocus = {
+        token: openTarget.token,
+        ...(openTarget.page ? { page: openTarget.page } : {}),
+        ...(openTarget.cfi ? { cfi: openTarget.cfi } : {}),
+      }
+      setFocusMap((current) => ({ ...current, [bookId]: focus }))
+    }
+    openTab({ id: bookId, kind: 'book', title: bookTitle(bookId) })
+    // 只在收到新的跳转目标时执行一次；token 已经保证同一次跳转不会重复处理。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTarget])
 
   /** 所有书库写操作都走这里：统一 busy 状态、统一错误提示，失败不留半截 UI。 */
   const mutate = async (label: string, action: (bridge: LibraryBridge) => Promise<LibraryTree>) => {
@@ -284,7 +330,11 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
           busy={busy}
           expandedIds={state.expandedFolderIds}
           selectedId={state.selectedFolderId}
-          counts={tree.counts}
+          counts={{
+            ...tree.counts,
+            highlights: annotationCounts?.highlights ?? tree.counts.highlights,
+            notes: annotationCounts?.notes ?? tree.counts.notes,
+          }}
           onToggle={toggleFolder}
           onSelect={(selectedFolderId) => update({ selectedFolderId })}
           onOpenBook={(id, title) => openTab({ id, title, kind: 'book' })}
@@ -329,6 +379,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
           onOpenSource={openSource}
           onFocusHighlight={openSource}
           onTitleChange={retitleNote}
+          onAnnotationsChange={() => void recountAnnotations()}
           onToggleRight={() => update({ rightVisible: !state.rightVisible })}
         />
 

@@ -23,10 +23,12 @@ interface Props {
   focusRequest?: ReaderFocus | null
   /** 打开（或新建后打开）某篇笔记的标签页 */
   onOpenNote: (noteId: string) => void
+  /** 划线或笔记数量变化后通知外层（左栏计数要准）。 */
+  onAnnotationsChange?: () => void
 }
 
 /** 真实书籍的阅读页：取源文件 → 挂 PDF.js / EPUB.js → 划线、笔记、进度。 */
-export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, onOpenNote }: Props) {
+export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, onOpenNote, onAnnotationsChange }: Props) {
   // 载入状态按 bookId 派生：换了书旧结果立即失效，effect 里不必同步重置。
   const [loaded, setLoaded] = useState<{ bookId: string; source: BookSource | null; error: string | null }>({
     bookId: '',
@@ -48,7 +50,8 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
   const refreshHighlights = useCallback(async () => {
     const items = await annotations.listForBook(bookId)
     setHighlights({ bookId, items })
-  }, [annotations, bookId])
+    onAnnotationsChange?.()
+  }, [annotations, bookId, onAnnotationsChange])
 
   useEffect(() => {
     let cancelled = false

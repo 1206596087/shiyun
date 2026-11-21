@@ -8,6 +8,7 @@ import type {
   Note,
   UpdateNoteInput,
 } from '../../src/types/annotation.ts'
+import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
 
 export interface LibraryMeta {
   dataDir: string
@@ -61,11 +62,19 @@ export interface ShiyunAnnotationApi {
   unlink: (highlightId: string, noteId: string) => Promise<void>
 }
 
+/** 银河图：只读整张图 + 固定/取消固定单颗星的位置。 */
+export interface ShiyunGraphApi {
+  load: () => Promise<KnowledgeGraphData>
+  pin: (nodeId: string, position: { x: number; y: number; z: number }) => Promise<{ nodeId: string; x: number; y: number; z: number }>
+  unpin: (nodeId: string) => Promise<boolean>
+}
+
 export interface ShiyunDesktopApi {
   getRuntimeInfo: () => Promise<{ platform: string; version: string; electron: string }>
   openExternal: (url: string) => Promise<void>
   library: ShiyunLibraryApi
   annotations: ShiyunAnnotationApi
+  graph: ShiyunGraphApi
 }
 
 const library: ShiyunLibraryApi = {
@@ -101,11 +110,18 @@ const annotations: ShiyunAnnotationApi = {
   unlink: (highlightId, noteId) => ipcRenderer.invoke('annotation:unlink', { highlightId, noteId }),
 }
 
+const graph: ShiyunGraphApi = {
+  load: () => ipcRenderer.invoke('graph:load'),
+  pin: (nodeId, position) => ipcRenderer.invoke('graph:pin', { nodeId, ...position }),
+  unpin: (nodeId) => ipcRenderer.invoke('graph:unpin', { nodeId }),
+}
+
 const desktopApi: ShiyunDesktopApi = {
   getRuntimeInfo: () => ipcRenderer.invoke('app:get-runtime-info'),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   library,
   annotations,
+  graph,
 }
 
 contextBridge.exposeInMainWorld('shiyunDesktop', desktopApi)

@@ -24,6 +24,11 @@ interface Props {
   onSelectLink: (id: string) => void
   onFocusNode: (id: string) => void
   onClearSelection: () => void
+  /** M5：拖动星星固定位置（只有书库模式传入）。 */
+  onNodeDrag?: (id: string, position: [number, number, number]) => void
+  onNodeDragEnd?: (id: string, position: [number, number, number]) => void
+  onDragStateChange?: (dragging: boolean) => void
+  dragActive?: boolean
 }
 
 export function GalaxyScene(props: Props) {
@@ -58,8 +63,15 @@ export function GalaxyScene(props: Props) {
         onSelectNode={props.onSelectNode}
         onSelectLink={props.onSelectLink}
         onFocusNode={props.onFocusNode}
+        {...(props.onNodeDrag ? { onNodeDrag: props.onNodeDrag } : {})}
+        {...(props.onNodeDragEnd ? { onNodeDragEnd: props.onNodeDragEnd } : {})}
+        {...(props.onDragStateChange ? { onDragStateChange: props.onDragStateChange } : {})}
       />
-      <CameraController focusPosition={props.focusPosition} resetToken={props.resetToken} />
+      <CameraController
+        focusPosition={props.focusPosition}
+        resetToken={props.resetToken}
+        disabled={Boolean(props.dragActive)}
+      />
       {config.bloomIntensity > 0.02 && (
         <EffectComposer multisampling={config.quality === 'high' ? 4 : 0}>
           <Bloom

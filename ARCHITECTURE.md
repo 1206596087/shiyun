@@ -124,6 +124,29 @@ ReaderPane ── 选区(quote/prefix/suffix/rects + page|cfi) ──┐
 - **多对多只在一处表达**：`highlight_notes(highlight_id, note_id)` 复合主键，关联与解除都幂等；删除划线只删关联与划线本身，笔记永远不动；删除笔记是软删并清关联。双向查看由 `notesForHighlight` / `highlightsForNote` 两个方向提供。
 - **两个渲染陷阱**（都在 M4 踩过并写进 CSS 注释）：划线的金色底必须用 `.book-reader__highlights .book-reader__mark` 这种更具体的选择器，否则被 `.workspace-space button { background: transparent }` 覆盖；同一 canvas 上的并发 `render()` 必须先 `await previous.promise`，否则 pdf.js 会静默拒绝新任务。
 
+## 3.4 星图投影数据流（M5）
+
+```text
+渲染进程                                   preload                主进程
+App boot ── getGraphBridge().load() ── graphBridge ── ipcRenderer ──> graphIpc.ts（校验来源/参数）
+                                                                        └ loadKnowledgeGraph(db)
+                                                                           ├ db/graph.loadGraphSource(db)   读 folders/books/highlights/notes/links/layouts
+                                                                           ├ graphProjection.projectKnowledgeGraph(source)  ← 纯函数，无 IO，有单测
+                                                                           └ db/graph.persistLayouts(db, newLayouts)  （pinned=0，ON CONFLICT DO NOTHING）
+   ←── KnowledgeGraphData（nodes/links/layouts）────────────────────────┘
+
+拖动星星 ── onNodeDrag（本地更新）→ onNodeDragEnd ── graph:pin ──> savePinnedLayout(db,nodeId,xyz)（pinned=1）
+双击星星 ── App.openInWorkspace(node) → WorkspaceOpenTarget → KnowledgeWorkspace 打开对应标签并定位
+```
+
+要点：
+
+- **投影是纯函数**：`src/data/graphProjection.ts` 只吃 `GraphSource`、只吐 `{graph, newLayouts, aggregatedHighlights, droppedNotes}`，不碰数据库、不读时钟、随机数用 `hashText` 派生，所以同一份书库两次投影完全一致，也能在 Vitest 里直接断言（9 个用例）。
+- **节点 id 带种类前缀**：`book:` / `hl:` / `hlagg:` / `note:` / `topic:`。`graph_layouts.node_id` 存完整节点 id；读到原型迁移留下的裸实体 id 时按 `kindPrefix()` 兼容，避免旧坐标丢失。
+- **渲染进程不能往银河里塞知识**：只有 `graph:load / pin / unpin` 三个通道，节点与连线永远由书库投影出来（AGENTS §1.6「不要把知识身份挂到粒子上」的延伸）。`pin` 只改坐标，不新增实体。
+- **星图是缓存，不是真相**：书库变了星图就旧了，所以从书房回银河会重新 `load()`（`refreshGraph()`），Explorer 也有「刷新星图」按钮。
+- **拖动与相机抢指针**：拖动期间把 `OrbitControls.enabled` 置 false（`CameraController` 的 `disabled` prop），否则拖星星会同时旋转相机；平面求交用 `THREE.Plane(new Vector3(0,1,0), -y)` 保持在同一水平面内移动。
+
 ## 4. 书房结构
 
 ```text

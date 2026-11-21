@@ -23,6 +23,8 @@ interface Props {
   onOpenSource: (highlight: Highlight) => void
   onFocusHighlight: (highlight: Highlight) => void
   onTitleChange: (noteId: string, title: string) => void
+  /** 划线 / 笔记发生变化后重新计数（左栏的「我的划线 / 我的笔记」）。 */
+  onAnnotationsChange?: () => void
   onToggleRight: () => void
 }
 
@@ -89,6 +91,7 @@ export function ReadingDesk(props: Props) {
                 annotations={props.annotations}
                 focusRequest={props.focusFor(activeTab.id)}
                 onOpenNote={props.onOpenNote}
+                {...(props.onAnnotationsChange ? { onAnnotationsChange: props.onAnnotationsChange } : {})}
               />
             )
           ) : activeTab.kind === 'note' ? (
