@@ -1,0 +1,96 @@
+{
+  "name": "shiyun",
+  "private": true,
+  "version": "0.1.0",
+  "description": "诗云 · 个人知识宇宙 —— 把书、划线与笔记放进同一片星空",
+  "author": "Shiyun",
+  "license": "MIT",
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "assets": "node scripts/copy-pdfjs-assets.mjs",
+    "predev": "npm run assets",
+    "dev": "electron-vite dev",
+    "predev:web": "npm run assets",
+    "dev:web": "vite",
+    "typecheck": "tsc -b --pretty false",
+    "prebuild": "npm run assets",
+    "build": "tsc -b && electron-vite build",
+    "prebuild:web": "npm run assets",
+    "build:web": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "preview": "electron-vite preview",
+    "preview:web": "vite preview",
+    "pack": "npm run build && electron-builder --win --x64 --dir --publish never",
+    "dist": "npm run build && electron-builder --win --x64 --publish never",
+    "pack:offline": "npm run build && electron-builder --win --x64 --dir --publish never -c.electronDist=node_modules/electron/dist",
+    "dist:offline": "npm run build && electron-builder --win --x64 --publish never -c.electronDist=node_modules/electron/dist"
+  },
+  "build": {
+    "appId": "com.shiyun.universe",
+    "productName": "诗云",
+    "copyright": "诗云 Shiyun",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Shiyun-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "诗云",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "@react-three/postprocessing": "^3.2.2",
+    "@tiptap/react": "^3.35.0",
+    "@tiptap/starter-kit": "^3.35.0",
+    "epubjs": "^0.3.93",
+    "pdfjs-dist": "^5.7.284",
+    "postprocessing": "^6.39.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.16.22",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "oxlint": "^1.90.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.1"
+  },
+  "allowScripts": {
+    "electron@45.4.1": true,
+    "@swc/core@1.16.22": true
+  }
+}

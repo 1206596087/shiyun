@@ -1,0 +1,26 @@
+/*
+ * 字体只用系统字体栈：这是一款本地优先的桌面应用，不允许界面依赖在线字体。
+ * （曾经 @import Google Fonts，离线时 document.fonts.ready 会挂 40 秒以上，
+ *   pdf.js 的文本层正等着它，结果划线选区要等将近一分钟才可用。）
+ */
+
+:root {
+  font-family: 'Noto Sans SC', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
+  color: #edf2ff;
+  background: #01020a;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --panel: rgba(7, 10, 30, 0.68);
+  --panel-strong: rgba(7, 10, 28, 0.9);
+  --border: rgba(160, 185, 255, 0.16);
+  --muted: #8490af;
+  --accent: #8cafff;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { min-width: 320px; background: #01020a; }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+::selection { background: rgba(129, 151, 255, 0.35); }
