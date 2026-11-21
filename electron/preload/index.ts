@@ -75,12 +75,17 @@ export interface ShiyunGraphApi {
 /** 研究栏（M6）：只上报矩形与导航意图，真正的 WebContentsView 在主进程里。 */
 export interface ShiyunResearchApi {
   ensure: () => Promise<ResearchState | null>
+  createTab: (url?: string) => Promise<ResearchState | null>
+  closeTab: (tabId: string) => Promise<ResearchState | null>
+  activateTab: (tabId: string) => Promise<ResearchState | null>
   setBounds: (bounds: ResearchBounds) => Promise<ResearchState | null>
   setVisible: (visible: boolean) => Promise<ResearchState | null>
   navigate: (url: string) => Promise<ResearchState | null>
   back: () => Promise<ResearchState | null>
   forward: () => Promise<ResearchState | null>
   reload: () => Promise<ResearchState | null>
+  setZoom: (zoom: number) => Promise<ResearchState | null>
+  selectedText: () => Promise<{ text: string; title: string; url: string } | null>
   getState: () => Promise<ResearchState | null>
   /** 主进程推来的导航状态（加载完成、标题变化、出错）。返回取消订阅函数。 */
   onState: (listener: (state: ResearchState) => void) => () => void
@@ -138,12 +143,17 @@ const graph: ShiyunGraphApi = {
 
 const research: ShiyunResearchApi = {
   ensure: () => ipcRenderer.invoke('research:ensure'),
+  createTab: (url) => ipcRenderer.invoke('research:createTab', url),
+  closeTab: (tabId) => ipcRenderer.invoke('research:closeTab', tabId),
+  activateTab: (tabId) => ipcRenderer.invoke('research:activateTab', tabId),
   setBounds: (bounds) => ipcRenderer.invoke('research:setBounds', bounds),
   setVisible: (visible) => ipcRenderer.invoke('research:setVisible', visible),
   navigate: (url) => ipcRenderer.invoke('research:navigate', url),
   back: () => ipcRenderer.invoke('research:back'),
   forward: () => ipcRenderer.invoke('research:forward'),
   reload: () => ipcRenderer.invoke('research:reload'),
+  setZoom: (zoom) => ipcRenderer.invoke('research:setZoom', zoom),
+  selectedText: () => ipcRenderer.invoke('research:selectedText'),
   getState: () => ipcRenderer.invoke('research:state'),
   onState: (listener) => {
     const handler = (_event: unknown, state: ResearchState) => listener(state)

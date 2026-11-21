@@ -52,14 +52,14 @@
 - 主进程 `electron/main/researchView.ts` 创建 `WebContentsView`，`win.contentView.addChildView(view)`，独立分区 `persist:research`，`sandbox:true`、`contextIsolation:true`、`nodeIntegration:false`，**不挂 preload**（网页拿不到任何桌面 API）。
 - 渲染进程的 `.research-view` 只是占位矩形，`ResearchSidebar` 用 `ResizeObserver` + `window.resize` 把 `getBoundingClientRect()` 报给 `research:setBounds`，主进程用 `win.getContentSize()` 夹一遍再 `setBounds`。
 - 切空间 / 隐藏右栏时 `setVisible(false)` → `setBounds({0,0,0,0})`，但 `WebContents` 保留（不销毁）。
-- 权限一律拒绝：`setPermissionRequestHandler(cb => cb(false))`、`setPermissionCheckHandler(() => false)`、`will-download` 阻止；`setWindowOpenHandler` 拒绝并把 http(s) 转 `shell.openExternal`；`will-navigate` 拦非 http(s)。
+- 权限一律拒绝：`setPermissionRequestHandler(cb => cb(false))`、`setPermissionCheckHandler(() => false)`、`will-download` 阻止；`will-navigate` 拦非 http(s)。原先把 `window.open` 转系统浏览器，0.3.0 起由 ADR-020 改为受控的新研究标签。
 - 地址栏输入由纯函数 `src/data/researchUrl.ts` 归一：完整 URL 直连、裸域名补 `https://`、其余走 Bing 搜索，`file:` / `shiyun-book:` / `javascript:` 一律降级成搜索词。
 
 **理由**：原生视图是唯一能真正加载任意站点、又与外层应用完全隔离的选项；不挂 preload 意味着即使网页被攻破也拿不到 `window.shiyunDesktop`；矩形上报而不是让渲染进程算坐标，避免两套坐标系互相污染。
 
 **代价 / 何时重新评估**：
 - 原生视图不进入 DOM：不吃书房的 CSS，也不被 DOM 截图工具拍到（README 的截图是把它自己的截图贴回矩形）；M7 若要「网页跟随阅读进度滚动」需要另设通道。
-- 右栏窄（默认 294px）时桌面版网站会横向溢出，属站点排版问题；若用户反馈强烈，M7 可加「移动版链接」或建议宽度。
+- 右栏窄时桌面版网站仍可能横向溢出；0.3.0 已加 360px 新默认值、900px 上限、三档布局与逐标签缩放（ADR-020）。
 - 目前不持久化上次访问 URL，也没有站点级权限记忆；需要时在主进程加 `app_settings` 键即可，不必改协议。
 
 ---
@@ -281,3 +281,15 @@
 导出选择带 JSON manifest 的无压缩顺序容器，避免大书库被整体加载进内存，也不引入归档依赖。代价是非通用 ZIP，必须配套还原工具。VACUUM INTO 获取数据库快照；导出前后校验每个源文件，源内容变化时失败，不发布半包。UI 偏好暂不包含在包中。旧笔记正文格式不变。
 
 参考：[Node.js 文件 API](https://github.com/nodejs/node/blob/main/doc/api/fs.md)、[SQLite FTS5](https://www.sqlite.org/fts5.html)、[SQLite VACUUM INTO](https://www.sqlite.org/lang_vacuum.html)。Node.js 代码主体 MIT、SQLite public domain；只调用既有运行时 API，未复制第三方实现、未新增分发组件。未来重型编辑器按需加载。
+
+---
+
+## ADR-020 · 原生网页多标签与显式选区动作
+
+**背景**：单个 `WebContentsView` 只能保留一条浏览上下文，窄右栏也不适合所有桌面网页；同时，第三方网页不能获得诗云的 preload 或桌面权限。
+
+**决策**：主进程最多管理 12 个隔离的 `WebContentsView`，只给当前标签可见 bounds；每个标签独立保存历史、错误和缩放，全部共享安全会话策略。网页 `window.open` 变为新研究标签。网页选文通过用户点击后执行一次只读 `window.getSelection()` 获取，不向第三方页面注入 UI 或桌面 API；翻译会明确提示其网络边界。PDF、EPUB 和笔记的选区工具条继续由应用自身渲染。
+
+PDF/EPUB 导入改为“验证魔数 → 哈希去重 → `.partial` 临时复制 → 大小与 SHA-256 复核 → 原子改名 → 插入数据库”。任何失败都删除本次书目录，避免先写记录造成幽灵书目。
+
+**代价**：多个网页标签会增加 Chromium 进程内存；标签暂不跨应用重启恢复。网页选区动作固定在研究栏底部，而不是覆盖到原生视图上。`@tiptap/core` 改为直接依赖以实现笔记彩色 Mark，仍为 TipTap 同版本 MIT 包。

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import { NoteHighlight } from './noteHighlight'
 import type { AnnotationBridge } from '../../data/annotationBridge'
 import type { Highlight, Note } from '../../types/annotation'
 import { describeLocator, readableNoteTitle } from '../../types/annotation'
 import { IconBook, IconHighlight, IconLink, IconNote, IconPlus } from './icons'
+import { researchSearchUrl, translationUrl } from '../../data/selectionActions'
 
 interface Props {
   noteId: string
@@ -171,8 +173,9 @@ interface BodyProps {
 function NoteEditorBody(props: BodyProps) {
   const { note, annotations } = props
   const [empty, setEmpty] = useState(note.bodyText.trim().length === 0)
+  const [selected, setSelected] = useState<{ text: string; x: number; y: number } | null>(null)
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, NoteHighlight],
     content: parseBody(note),
     editorProps: {
       attributes: {
@@ -188,6 +191,22 @@ function NoteEditorBody(props: BodyProps) {
       props.onChange(JSON.stringify(instance.getJSON()), instance.getText())
     },
   })
+
+  const captureSelection = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !editor) { setSelected(null); return }
+    const range = selection.getRangeAt(0)
+    if (!editor.view.dom.contains(range.commonAncestorContainer)) { setSelected(null); return }
+    const text = selection.toString().trim()
+    if (!text) { setSelected(null); return }
+    const rect = range.getBoundingClientRect()
+    setSelected({ text: text.slice(0, 2000), x: rect.left + rect.width / 2, y: rect.top })
+  }
+
+  const openResearch = (url: string) => {
+    window.dispatchEvent(new CustomEvent('shiyun-research-open', { detail: { url, newTab: true } }))
+    setSelected(null)
+  }
 
   return (
     <div className="note-page">
@@ -231,7 +250,7 @@ function NoteEditorBody(props: BodyProps) {
         <button onClick={() => editor?.chain().focus().redo().run()} title="重做">↻</button>
       </div>
 
-      <div className="note-editor">
+      <div className="note-editor" onMouseUp={captureSelection} onTouchEnd={captureSelection}>
         <EditorContent editor={editor} />
         {empty && (
           <button
@@ -243,6 +262,27 @@ function NoteEditorBody(props: BodyProps) {
           </button>
         )}
       </div>
+
+      {selected && (
+        <div
+          className="selection-toolbar"
+          style={{ left: Math.max(190, Math.min(window.innerWidth - 190, selected.x)), top: Math.max(56, selected.y - 52) }}
+          role="toolbar"
+          aria-label="笔记选区工具栏"
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <span className="selection-toolbar__label"><IconHighlight size={13} />标记</span>
+          {(['gold', 'rose', 'sage'] as const).map((color) => (
+            <button key={color} className={`selection-color is-${color}`} aria-label={`${color} 标记`}
+              onClick={() => { editor?.chain().focus().toggleMark('selectionHighlight', { color }).run(); setSelected(null) }} />
+          ))}
+          <span className="selection-toolbar__divider" />
+          <button onClick={() => void navigator.clipboard.writeText(selected.text)}>复制</button>
+          <button onClick={() => openResearch(translationUrl(selected.text))}>翻译</button>
+          <button onClick={() => openResearch(researchSearchUrl(selected.text))}>搜索</button>
+          <button className="selection-toolbar__close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
+        </div>
+      )}
 
       <section className="note-links" aria-label="关联的划线">
         <header className="note-links__head">

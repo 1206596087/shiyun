@@ -11,6 +11,8 @@ export interface ResearchBounds {
 }
 
 export interface ResearchState {
+  tabs: ResearchTabState[]
+  activeTabId: string | null
   url: string
   title: string
   loading: boolean
@@ -20,7 +22,20 @@ export interface ResearchState {
   error: string | null
 }
 
+export interface ResearchTabState {
+  id: string
+  url: string
+  title: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  error: string | null
+  zoom: number
+}
+
 export const EMPTY_RESEARCH_STATE: ResearchState = {
+  tabs: [],
+  activeTabId: null,
   url: '',
   title: '',
   loading: false,

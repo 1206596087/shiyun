@@ -107,7 +107,7 @@
 ## M4 · 划线、笔记与多对多（完成）
 
 - [x] PDF 文本层与 EPUB CFI 划线，写入 `highlights`（`quote / prefix / suffix` 必填，页/CFI 至少一个）——PDF 用自排 span + 归一化矩形，EPUB 用 CFI。
-- [x] 选中文字浮动工具栏：添加划线 / 写笔记（`selection-toolbar`）。
+- [x] 选中文字浮动工具栏：三色标记 / 写笔记 / 复制 / 翻译 / 搜索（`selection-toolbar`）；笔记正文也支持同一套选区动作。
 - [x] TipTap 笔记编辑器（`@tiptap/react` 3 + `@tiptap/starter-kit` 3），正文去抖 600ms 自动保存 `body` 与 `body_text`，标题可留空由正文首行代替。
 - [x] 一条划线关联多篇笔记、一篇笔记引用多条划线，`highlight_notes` 复合主键，笔记页与划线卡片双向可查。
 - [x] 笔记页底部「关联的划线」可跳回原文（PDF 跳页 / EPUB 跳 CFI）与解除关联；划线卡片可「写笔记」「定位到这里」「删除划线」。
@@ -117,8 +117,7 @@
 
 ### M4 已知限制
 
-- 划线颜色固定金色；`highlights.color` 支持 gold/rose/sage，但还没有颜色选择器。
-- 多行选区只画「第一条矩形」的高亮框（`rects` 已存全部矩形，画面后续细化）。
+- 划线与笔记选区均有 gold/rose/sage 三色选择；阅读器多行选区会存全部矩形，逐行绘制仍需复杂 PDF/EPUB 样本继续验证。
 - 空笔记的提示是自绘覆盖层（没装 `@tiptap/extension-placeholder`），语义上等价但不参与编辑器 undo 栈。
 - 浏览器演示模式（`dev:web`）用的是内存注释桥，刷新即丢；这是刻意的降级（ADR-011）。
 
@@ -141,15 +140,17 @@ M5 已知限制：
 
 - [x] 主进程创建 `WebContentsView`（`electron/main/researchView.ts`），独立分区 `persist:research`、`sandbox:true`、无 preload；渲染进程用 `ResizeObserver` 报右栏矩形，拖栏宽、开关右栏、切空间都会同步 bounds，隐藏时 bounds 归零（ADR-017）。
 - [x] 地址栏（完整 URL / 裸域名 / 搜索词三态，`researchUrl.ts` 纯函数 + 8 个单测）、前进 / 后退 / 刷新、标题与 loading 事件推送、外部浏览器打开。
-- [x] 权限收紧：`setPermissionRequestHandler` / `setPermissionCheckHandler` 一律拒绝，`will-download` 阻止，`window.open` 转系统浏览器，非 http(s) 导航拦截。
+- [x] 权限收紧：`setPermissionRequestHandler` / `setPermissionCheckHandler` 一律拒绝，`will-download` 阻止，非 http(s) 导航拦截；网页 `window.open` 转为受控的新研究标签。
+- [x] 多标签：最多 12 个真实 `WebContentsView`，可新建、切换、关闭；每个标签独立保留历史、错误与 50%–200% 缩放。
+- [x] 网页适配：研究栏可在紧凑、扩展、沉浸三种布局间切换，右栏最大宽度 900px；网页选文可翻译、保存摘录或复制。
 - [x] 未实现状态的处理：浏览器模式（无主进程）明确写「右侧网页在桌面版里是真实网页」并给外部浏览器出口，不再有「开发中」占位。
 - [x] 实机验证：研究栏页面视口 262×568 对上右栏矩形 262×570；导航到 example.com 后标题为 `Example Domain`；回银河 `visible:false`、再进书房恢复 `visible:true`；`canGoBack` 随导航变化；Bing 搜索与维基百科页面在实机里真实渲染。
 
 ### M6 已知限制
 
-- 右栏默认 294px（最大 440px），桌面版网站在这个宽度会横向溢出——网站自己的排版问题，界面不做缩放伪装。
+- 新安装默认右栏 360px（最大 900px），可切换扩展/沉浸布局并逐标签缩放；少数固定宽度站点仍可能横向溢出。
 - 原生视图不进入 DOM，因此不吃书房 CSS，也不被 DOM 截图工具拍到（README 那张图是把视图截图贴回矩形）。
-- 没有做「最近访问列表」与站点级权限记忆；每次启动从空白页开始（尚未持久化上次 URL）。
+- 标签和最近访问尚不跨应用重启恢复，也没有站点级权限记忆；每次启动从空白页开始。
 - 网页视图复用同一个 `persist:research` 分区，不随空间销毁；关闭窗口时由 `disposeResearchView()` 回收。
 
 ## M7 · 打磨与发布（完成安装包，未签名）

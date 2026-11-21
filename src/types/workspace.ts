@@ -20,7 +20,7 @@ export interface WorkspaceUiState {
 
 export const DEFAULT_WORKSPACE_UI: WorkspaceUiState = {
   leftWidth: 236,
-  rightWidth: 294,
+  rightWidth: 360,
   rightVisible: true,
   activeTabId: 'book-biostatistics',
   tabs: [{ id: 'book-biostatistics', kind: 'book', title: '生物统计学.pdf' }],

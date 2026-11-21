@@ -2,41 +2,33 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { IconBack, IconExternal, IconForward, IconGlobe, IconRefresh, IconSearch } from './icons'
 import { getResearchBridge } from '../../data/researchBridge'
 import { displayUrl, toNavigableUrl } from '../../data/researchUrl'
+import { translationUrl, type ResearchRequest } from '../../data/selectionActions'
 import { EMPTY_RESEARCH_STATE, type ResearchBounds, type ResearchState } from '../../types/research'
 
+export type ResearchLayout = 'compact' | 'expanded' | 'immersive'
+
 interface Props {
-  /** 书房是否是当前空间：切到银河时必须把网页藏起来，否则它会浮在银河上面。 */
   active: boolean
-  /** 右栏是否显示（用户可以在布局设置里隐藏）。 */
   visible: boolean
-  /** 打开研究栏时预填的搜索词（例如当前选中的划线主题）。 */
+  layout: ResearchLayout
+  onLayoutChange: (layout: ResearchLayout) => void
+  request?: (ResearchRequest & { token: number }) | null
   initialQuery?: string
 }
 
-/**
- * 右栏的网页研究栏（M6）。
- *
- * 真正的网页由主进程的 `WebContentsView` 渲染，它不是 DOM 节点，
- * 所以这里的 `.research-view` 只是一个位置占位：用 ResizeObserver 把矩形报给主进程，
- * 主进程把原生视图摆上去。浏览器模式没有主进程，只能诚实地写明「需要桌面版」。
- */
-export function ResearchSidebar({ active, visible, initialQuery }: Props) {
+export function ResearchSidebar({ active, visible, layout, onLayoutChange, request, initialQuery }: Props) {
   const bridge = useMemo(() => getResearchBridge(), [])
   const slotRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const [state, setState] = useState<ResearchState>(EMPTY_RESEARCH_STATE)
   const [draft, setDraft] = useState(initialQuery ?? '')
+  const [notice, setNotice] = useState('')
 
   const report = useCallback(() => {
     if (bridge.mode !== 'desktop') return
-    const slot = slotRef.current
-    if (!slot) return
-    const rect = slot.getBoundingClientRect()
-    const bounds: ResearchBounds = {
-      x: rect.left,
-      y: rect.top,
-      width: rect.width,
-      height: rect.height,
-    }
+    const rect = slotRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const bounds: ResearchBounds = { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
     void bridge.setBounds(bounds)
   }, [bridge])
 
@@ -44,136 +36,129 @@ export function ResearchSidebar({ active, visible, initialQuery }: Props) {
     if (bridge.mode !== 'desktop') return
     let cancelled = false
     void bridge.ensure().then((next) => {
-      if (!cancelled && next) setState(next)
+      if (!cancelled && next) { setState(next); setDraft(next.url ? displayUrl(next.url) : '') }
     })
-    const unsubscribe = bridge.onState((next) => setState(next))
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
+    const unsubscribe = bridge.onState((next) => {
+      setState(next)
+      if (document.activeElement !== inputRef.current) setDraft(next.url ? displayUrl(next.url) : '')
+    })
+    return () => { cancelled = true; unsubscribe() }
   }, [bridge])
 
-  // 位置同步：窗口缩放、拖栏宽、右栏显隐、切空间都会改变矩形。
   useEffect(() => {
     if (bridge.mode !== 'desktop') return
     const slot = slotRef.current
     if (!slot) return
-    const observer = new ResizeObserver(() => report())
+    const observer = new ResizeObserver(report)
     observer.observe(slot)
     window.addEventListener('resize', report)
     report()
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', report)
-    }
-  }, [bridge, report])
+    return () => { observer.disconnect(); window.removeEventListener('resize', report) }
+  }, [bridge, report, layout])
 
   const shown = active && visible
-
   useEffect(() => {
     if (bridge.mode !== 'desktop') return
-    void bridge.setVisible(shown).then((next) => {
-      if (next) setState(next)
-    })
-    if (shown) {
-      // 显示之后再量一次，避免布局动画结束时尺寸还没落定
-      const timer = setTimeout(report, 60)
-      return () => clearTimeout(timer)
-    }
-    return undefined
+    void bridge.setVisible(shown).then((next) => next && setState(next))
+    if (!shown) return
+    const timer = setTimeout(report, 80)
+    return () => clearTimeout(timer)
   }, [bridge, shown, report])
+
+  useEffect(() => {
+    if (bridge.mode !== 'desktop' || !request?.url) return
+    const action = request.newTab ? bridge.createTab(request.url) : bridge.navigate(request.url)
+    void action.then((next) => next && setState(next))
+  }, [bridge, request])
 
   const go = () => {
     const url = toNavigableUrl(draft)
-    setDraft(displayUrl(url))
-    void bridge.navigate(url).then((next) => {
-      if (next) setState(next)
-    })
+    void bridge.navigate(url).then((next) => next && setState(next))
+  }
+
+  const handleWebSelection = async (action: 'translate' | 'note' | 'copy') => {
+    const selection = await bridge.selectedText()
+    if (!selection) { setNotice('请先在网页中选中文字。'); return }
+    if (action === 'translate') {
+      setNotice('翻译会把所选文字发送到 Bing Translator。')
+      const next = await bridge.createTab(translationUrl(selection.text)); if (next) setState(next)
+    } else if (action === 'copy') {
+      await navigator.clipboard.writeText(selection.text); setNotice('已复制网页选中文字。')
+    } else {
+      const note = await window.shiyunDesktop?.annotations.createNote({
+        title: selection.title ? `网页摘录 · ${selection.title}` : '网页摘录',
+        bodyText: `${selection.text}\n\n来源：${selection.url}`,
+      })
+      setNotice(note ? '网页摘录已保存到“我的笔记”。' : '桌面版才能保存网页摘录。')
+      if (note) window.dispatchEvent(new Event('shiyun-library-changed'))
+    }
   }
 
   const demo = bridge.mode !== 'desktop'
+  const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId)
+  const zoom = activeTab?.zoom ?? 1
 
   return (
-    <aside className="research-sidebar" aria-label="网页研究">
+    <aside className={`research-sidebar is-${layout}`} aria-label="网页研究">
+      <div className="research-tabs" role="tablist" aria-label="网页标签">
+        {state.tabs.map((tab) => (
+          <div key={tab.id} role="tab" aria-selected={tab.id === state.activeTabId}
+            className={`research-tab${tab.id === state.activeTabId ? ' is-active' : ''}`}>
+            <button className="research-tab__activate"
+              onClick={() => { setDraft(tab.url ? displayUrl(tab.url) : ''); void bridge.activateTab(tab.id).then((next) => next && setState(next)) }}>
+              <span>{tab.loading ? '加载中…' : tab.title || '新标签页'}</span>
+            </button>
+            <button className="research-tab__close" aria-label={`关闭 ${tab.title || '标签页'}`}
+              onClick={() => void bridge.closeTab(tab.id).then((next) => next && setState(next))}>×</button>
+          </div>
+        ))}
+        <button className="research-tab__new" aria-label="新建网页标签" title="新建标签" disabled={demo}
+          onClick={() => void bridge.createTab().then((next) => next && setState(next))}>＋</button>
+      </div>
+
       <div className="research-nav">
-        <button
-          type="button"
-          aria-label="后退"
-          title={state.canGoBack ? '后退' : '没有上一页'}
-          disabled={demo || !state.canGoBack}
-          onClick={() => void bridge.back().then((next) => next && setState(next))}
-        >
-          <IconBack size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label="前进"
-          title={state.canGoForward ? '前进' : '没有下一页'}
-          disabled={demo || !state.canGoForward}
-          onClick={() => void bridge.forward().then((next) => next && setState(next))}
-        >
-          <IconForward size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label="刷新"
-          title={demo ? '需要桌面版' : '刷新网页'}
-          disabled={demo || !state.url}
-          onClick={() => void bridge.reload().then((next) => next && setState(next))}
-        >
-          <IconRefresh size={15} />
-        </button>
-        <p className="research-nav__title" title={state.title || state.url}>
-          <IconGlobe size={14} />
-          {state.title || (state.url ? displayUrl(state.url) : '网页研究')}
-        </p>
+        <button aria-label="后退" disabled={demo || !state.canGoBack} onClick={() => void bridge.back().then((next) => next && setState(next))}><IconBack size={15} /></button>
+        <button aria-label="前进" disabled={demo || !state.canGoForward} onClick={() => void bridge.forward().then((next) => next && setState(next))}><IconForward size={15} /></button>
+        <button aria-label="刷新" disabled={demo || !state.url} onClick={() => void bridge.reload().then((next) => next && setState(next))}><IconRefresh size={15} /></button>
+        <p className="research-nav__title" title={state.title || state.url}><IconGlobe size={14} />{state.title || '网页研究'}</p>
       </div>
 
       <div className="research-input">
-        <input
-          value={draft}
-          placeholder={demo ? '桌面版可搜索关键词或输入网址' : '搜索关键词或输入网址'}
-          aria-label="网页研究地址栏"
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !demo) go()
-          }}
-          disabled={demo}
-        />
-        <button type="button" onClick={go} title={demo ? '需要桌面版' : '打开'} aria-label="打开" disabled={demo}>
-          <IconSearch size={15} />
-        </button>
+        <input ref={inputRef} value={draft} placeholder="搜索关键词或输入网址" aria-label="网页研究地址栏" disabled={demo}
+          onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !demo) go() }} />
+        <button onClick={go} aria-label="打开" disabled={demo}><IconSearch size={15} /></button>
       </div>
 
-      {state.error && <p className="research-error">{state.error}</p>}
+      <div className="research-layout-tools" aria-label="网页布局与缩放">
+        {(['compact', 'expanded', 'immersive'] as const).map((item) => (
+          <button key={item} className={layout === item ? 'is-on' : ''} onClick={() => onLayoutChange(item)}>
+            {item === 'compact' ? '紧凑' : item === 'expanded' ? '扩展' : '沉浸'}
+          </button>
+        ))}
+        <span />
+        <button disabled={demo} onClick={() => void bridge.setZoom(zoom - 0.1)}>−</button>
+        <small>{Math.round(zoom * 100)}%</small>
+        <button disabled={demo} onClick={() => void bridge.setZoom(zoom + 0.1)}>＋</button>
+        <button disabled={demo} onClick={() => void bridge.setZoom(1)}>重置</button>
+      </div>
 
+      {(state.error || notice) && <p className="research-error" role="status">{state.error || notice}</p>}
       <div className="research-view" ref={slotRef} aria-hidden={demo}>
-        {demo && (
-          <div className="research-view__demo">
-            <h3>右侧网页在桌面版里是真实网页</h3>
-            <p>浏览器模式没有主进程，也就没有 <code>WebContentsView</code>，这里不会假装加载网页。</p>
-            <p className="research-copy--muted">
-              桌面版（<code>npm run dev</code>）里这一块是独立的浏览器视图：地址栏、前进后退、刷新都可用，权限（摄像头、麦克风、定位、通知、下载）默认全部拒绝。
-            </p>
-            <button type="button" onClick={() => void window.shiyunDesktop?.openExternal(toNavigableUrl(initialQuery ?? 'OR 与 RR 的区别 流行病学'))}>
-              <IconExternal size={14} />在系统浏览器里搜索
-            </button>
-          </div>
-        )}
+        {(demo || !state.url) && <div className="research-view__demo">
+          <h3>{demo ? '桌面版可使用真实网页研究' : '新标签页'}</h3>
+          <p>{demo ? '浏览器预览没有 Electron 网页视图。' : '在上方输入网址或关键词开始研究。'}</p>
+        </div>}
       </div>
 
-      <div className="research-footer">
-        <button
-          type="button"
-          onClick={() => {
-            const target = state.url || toNavigableUrl(initialQuery ?? 'OR 与 RR 的区别 流行病学')
-            if (window.shiyunDesktop) void window.shiyunDesktop.openExternal(target)
-            else window.open(target, '_blank', 'noopener,noreferrer')
-          }}
-          title="在系统默认浏览器中打开当前网页"
-        >
-          <IconExternal size={14} />外部浏览器打开
-        </button>
+      <div className="research-selection-actions">
+        <button disabled={demo || !state.url} onClick={() => void handleWebSelection('translate')}>翻译选中</button>
+        <button disabled={demo || !state.url} onClick={() => void handleWebSelection('note')}>保存摘录</button>
+        <button disabled={demo || !state.url} onClick={() => void handleWebSelection('copy')}>复制</button>
+        <button onClick={() => {
+          const target = state.url || toNavigableUrl(initialQuery ?? '')
+          if (window.shiyunDesktop) void window.shiyunDesktop.openExternal(target)
+          else window.open(target, '_blank', 'noopener,noreferrer')
+        }}><IconExternal size={14} />外部打开</button>
       </div>
     </aside>
   )

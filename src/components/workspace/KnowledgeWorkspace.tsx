@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { FileSidebar } from './FileSidebar'
 import { ReadingDesk } from './ReadingDesk'
-import { ResearchSidebar } from './BrowserSidebar'
+import { ResearchSidebar, type ResearchLayout } from './BrowserSidebar'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { clampWidth, sanitizeWorkspaceUi } from './workspaceLayout'
 import { DEFAULT_WORKSPACE_UI, type WorkspaceOpenTarget, type WorkspaceTab, type WorkspaceUiState } from '../../types/workspace'
@@ -12,13 +12,20 @@ import { getAnnotationBridge } from '../../data/annotationBridge'
 import { readableNoteTitle, type Highlight } from '../../types/annotation'
 import type { ReaderFocus } from './ReaderPane'
 import { migratePrototypeOnce } from '../../data/prototypeMigration'
+import type { ResearchRequest } from '../../data/selectionActions'
 import './Workspace.css'
 
 const STORAGE_KEY = 'shiyun-workspace-ui-v1'
+const RESEARCH_LAYOUT_KEY = 'shiyun-research-layout-v1'
 const EMPTY_COUNTS: LibraryCounts = { books: 0, folders: 0, highlights: 0, notes: 0, links: 0 }
 const HIGHLIGHTS_TAB: WorkspaceTab = { id: 'highlights', kind: 'highlights', title: '我的划线' }
 const NOTES_TAB: WorkspaceTab = { id: 'notes', kind: 'notes', title: '我的笔记' }
 const LEGACY_NOTE_TAB_ID = 'note-or-rr'
+
+function loadResearchLayout(): ResearchLayout {
+  const saved = localStorage.getItem(RESEARCH_LAYOUT_KEY)
+  return saved === 'expanded' || saved === 'immersive' ? saved : 'compact'
+}
 
 function loadWorkspaceState(): WorkspaceUiState {
   const state = (() => {
@@ -64,8 +71,22 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
   const bridgeRef = useRef<LibraryBridge | null>(bridge)
   const resizeSide = useRef<'left' | 'right' | null>(null)
   const [focusMap, setFocusMap] = useState<Record<string, ReaderFocus>>({})
+  const [researchLayout, setResearchLayout] = useState<ResearchLayout>(loadResearchLayout)
+  const [researchRequest, setResearchRequest] = useState<(ResearchRequest & { token: number }) | null>(null)
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
+  useEffect(() => localStorage.setItem(RESEARCH_LAYOUT_KEY, researchLayout), [researchLayout])
+
+  useEffect(() => {
+    const openResearch = (event: Event) => {
+      const detail = (event as CustomEvent<ResearchRequest>).detail
+      if (!detail?.url) return
+      setState((current) => ({ ...current, rightVisible: true }))
+      setResearchRequest({ ...detail, token: Date.now() })
+    }
+    window.addEventListener('shiyun-research-open', openResearch)
+    return () => window.removeEventListener('shiyun-research-open', openResearch)
+  }, [])
 
   // 打开书库一次：桌面版先做原型数据迁移，再取树；浏览器版直接用演示书库。
   useEffect(() => {
@@ -313,7 +334,9 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
 
   const style = {
     '--ws-left': `${state.leftWidth}px`,
-    '--ws-right': state.rightVisible ? `${state.rightWidth}px` : '0px',
+    '--ws-right': state.rightVisible
+      ? researchLayout === 'expanded' ? `min(62vw, ${Math.max(620, state.rightWidth)}px)` : `${state.rightWidth}px`
+      : '0px',
   } as CSSProperties
 
   // 键盘快捷键：只在书房是当前空间时生效，输入框里的按键照旧交给输入框。
@@ -342,7 +365,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
 
   return (
     <section
-      className={`workspace-space ${active ? 'is-active' : 'is-inactive'} ${state.rightVisible ? 'has-research' : 'is-research-hidden'}`}
+      className={`workspace-space ${active ? 'is-active' : 'is-inactive'} ${state.rightVisible ? 'has-research' : 'is-research-hidden'} research-layout-${researchLayout}`}
       style={style}
       aria-hidden={!active}
     >
@@ -424,7 +447,13 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
               aria-label="调整网页研究栏宽度"
               onPointerDown={(event) => beginResize('right', event)}
             />
-            <ResearchSidebar active={active} visible={state.rightVisible} />
+            <ResearchSidebar
+              active={active}
+              visible={state.rightVisible}
+              layout={researchLayout}
+              request={researchRequest}
+              onLayoutChange={setResearchLayout}
+            />
           </>
         )}
       </div>

@@ -48,7 +48,7 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 4. 维护状态（最近发布、issue 活跃度）？
 5. 不装它的替代方案是什么？
 
-已安装：`pdfjs-dist@5.7.284`（PDF）、`epubjs@0.3.93`（EPUB）、`@tiptap/react` + `@tiptap/starter-kit@3.35.0`（笔记编辑器），见 ADR-013 / ADR-014 / ADR-015。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力（下一步如果需要划线颜色选择器，优先自己画，不引入 UI 库）。
+已安装：`pdfjs-dist@5.7.284`（PDF）、`epubjs@0.3.93`（EPUB）、`@tiptap/core` + `@tiptap/react` + `@tiptap/starter-kit@3.35.0`（笔记编辑器与彩色 Mark），见 ADR-013 / ADR-014 / ADR-015 / ADR-020。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力；划线颜色选择器为自绘 UI，没有引入组件库。
 
 ## 5. 测试要求
 

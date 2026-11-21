@@ -7,6 +7,7 @@ import { describeLocator, readableNoteTitle } from '../../types/annotation'
 const EpubReader = lazy(() => import('./EpubReader').then((module) => ({ default: module.EpubReader })))
 const PdfReader = lazy(() => import('./PdfReader').then((module) => ({ default: module.PdfReader })))
 import { IconBook, IconHighlight, IconNote } from './icons'
+import { researchSearchUrl, translationUrl } from '../../data/selectionActions'
 
 export interface ReaderFocus {
   page?: number
@@ -176,12 +177,14 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
     [annotations, bookId, refreshHighlights, selection],
   )
 
-  const handleHighlightOnly = useCallback(() => {
-    void commitSelection().catch((reason: unknown) => {
-      setLoaded((current) => ({
-        ...current,
-        error: reason instanceof Error ? reason.message : '保存划线失败',
-      }))
+  const openResearch = useCallback((url: string) => {
+    window.dispatchEvent(new CustomEvent('shiyun-research-open', { detail: { url, newTab: true } }))
+    setSelection(null)
+  }, [])
+
+  const saveColoredHighlight = useCallback((color: string) => {
+    void commitSelection(color).catch((reason: unknown) => {
+      setLoaded((current) => ({ ...current, error: reason instanceof Error ? reason.message : '保存划线失败' }))
     })
   }, [commitSelection])
 
@@ -293,17 +296,26 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
       {selection && (
         <div
           className="selection-toolbar"
-          style={{ left: Math.max(12, selection.anchor.x), top: Math.max(12, selection.anchor.y - 46) }}
+          style={{
+            left: Math.max(190, Math.min(window.innerWidth - 190, selection.anchor.x)),
+            top: Math.max(56, selection.anchor.y - 52),
+          }}
           role="toolbar"
           aria-label="选中文字工具栏"
+          onMouseDown={(event) => event.preventDefault()}
         >
-          <button onClick={handleHighlightOnly} disabled={busy} title="把选中的文字存成划线">
-            <IconHighlight size={14} />添加划线
-          </button>
-          <span aria-hidden="true">/</span>
+          <span className="selection-toolbar__label"><IconHighlight size={13} />标记</span>
+          <button className="selection-color is-gold" onClick={() => saveColoredHighlight('gold')} disabled={busy} title="金色标记" aria-label="金色标记" />
+          <button className="selection-color is-rose" onClick={() => saveColoredHighlight('rose')} disabled={busy} title="玫瑰色标记" aria-label="玫瑰色标记" />
+          <button className="selection-color is-sage" onClick={() => saveColoredHighlight('sage')} disabled={busy} title="鼠尾草色标记" aria-label="鼠尾草色标记" />
+          <span className="selection-toolbar__divider" aria-hidden="true" />
           <button onClick={handleNoteFromSelection} disabled={busy} title="保存划线并新建一篇关联笔记">
             <IconNote size={14} />写笔记
           </button>
+          <button onClick={() => void navigator.clipboard.writeText(selection.quote)} title="复制选中文字">复制</button>
+          <button onClick={() => openResearch(translationUrl(selection.quote))} title="联网翻译所选文字">翻译</button>
+          <button onClick={() => openResearch(researchSearchUrl(selection.quote))} title="在网页中搜索所选文字">搜索</button>
+          <button className="selection-toolbar__close" onClick={() => setSelection(null)} aria-label="关闭选区工具栏">×</button>
         </div>
       )}
       {active && (

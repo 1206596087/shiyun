@@ -3,7 +3,7 @@ import { DEFAULT_WORKSPACE_UI, type WorkspaceTab, type WorkspaceTabKind, type Wo
 export const LEFT_MIN = 196
 export const LEFT_MAX = 360
 export const RIGHT_MIN = 264
-export const RIGHT_MAX = 440
+export const RIGHT_MAX = 900
 
 const TAB_KINDS: WorkspaceTabKind[] = ['book', 'note', 'highlights', 'notes']
 

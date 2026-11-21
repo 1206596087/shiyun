@@ -23,12 +23,25 @@ function Icon({ size = 16, children, ...rest }: IconProps & { children: ReactNod
 }
 
 export function IconMark(props: IconProps) {
+  const { size = 26, ...rest } = props
   return (
-    <Icon {...props}>
-      <circle cx="12" cy="12" r="8.6" strokeWidth={1.4} />
-      <circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none" />
-      <circle cx="17.4" cy="7.2" r="1.15" fill="currentColor" stroke="none" />
-    </Icon>
+    <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true" focusable="false" {...rest}>
+      <defs>
+        <linearGradient id="shiyun-mark-core" x1="7" y1="5" x2="22" y2="24" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#32384C" />
+          <stop offset="1" stopColor="#171A27" />
+        </linearGradient>
+        <linearGradient id="shiyun-mark-gold" x1="5" y1="8" x2="23" y2="19" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#E5C986" />
+          <stop offset="1" stopColor="#A77B2F" />
+        </linearGradient>
+      </defs>
+      <circle cx="14" cy="14" r="12" fill="url(#shiyun-mark-core)" />
+      <path d="M5.3 16.1c3.2 3.7 10.4 4.7 15.2 1.5 3.2-2.1 3.2-5.1.6-6.9-2.9-2-8.2-1.4-10.9.8-1.8 1.5-1.5 3.3.3 4.2 2 1 5.4.5 6.7-.8" fill="none" stroke="url(#shiyun-mark-gold)" strokeWidth="1.35" strokeLinecap="round" />
+      <circle cx="14.1" cy="14" r="2.55" fill="#F2D99C" />
+      <circle cx="21.3" cy="8.1" r="1.1" fill="#D8B667" />
+      <path d="m8 7 .35 1.05L9.4 8.4l-1.05.35L8 9.8l-.35-1.05-1.05-.35 1.05-.35L8 7Z" fill="#F7E8BE" />
+    </svg>
   )
 }
 

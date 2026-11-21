@@ -12,6 +12,7 @@ import {
   deleteBook,
   deleteFolder,
   insertBook,
+  findBookSource,
   listTree,
   moveNode,
   renameNode,
@@ -157,6 +158,33 @@ describe('导入书籍', () => {
     writeFileSync(source, 'not a book')
 
     await expect(importBookFromPath(db, paths, source, null)).rejects.toThrow(/PDF|EPUB/)
+  })
+
+  it('伪装成 PDF 的坏文件不入库，也不留下失效目录', async () => {
+    const paths = resolveDataPaths(workDir)
+    const source = join(workDir, '坏文件.pdf')
+    writeFileSync(source, 'this is not a PDF')
+
+    await expect(importBookFromPath(db, paths, source, null)).rejects.toThrow(/不是有效的 PDF/)
+    expect(countLibrary(db).books).toBe(0)
+    expect(existsSync(paths.booksDir)).toBe(false)
+  })
+
+  it('导入后关闭并重新打开数据库，书籍和管理副本仍可读取', async () => {
+    const paths = resolveDataPaths(workDir)
+    const source = join(workDir, '重启验证.pdf')
+    writeFileSync(source, '%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n')
+    const persistent = openDatabase(paths.dbFile)
+    runMigrations(persistent)
+    const imported = await importBookFromPath(persistent, paths, source, null)
+    persistent.close()
+
+    const reopened = openDatabase(paths.dbFile)
+    try {
+      const row = findBookSource(reopened, imported.book!.id)
+      expect(row?.filePath).toBe(join('books', imported.book!.id, 'source.pdf'))
+      expect(existsSync(join(paths.root, row!.filePath!))).toBe(true)
+    } finally { reopened.close() }
   })
 })
 

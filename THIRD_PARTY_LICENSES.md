@@ -16,6 +16,7 @@
 | React / React DOM | https://github.com/facebook/react | UI 状态与 DOM 渲染 | MIT | 再分发时保留 MIT 版权与许可文本 |
 | pdfjs-dist 5.7.284 | https://github.com/mozilla/pdf.js | PDF 解析、页面渲染、目录 | Apache-2.0 | 保留 `LICENSE`；随包分发 `cmaps/` 与 `standard_fonts/`（由 `scripts/copy-pdfjs-assets.mjs` 复制到 `public/pdfjs/`） |
 | epubjs 0.3.93 | https://github.com/futurepress/epub.js | EPUB 解析、CFI 定位、分页渲染 | BSD-2-Clause | 保留版权声明与许可条件 |
+| @tiptap/core 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记选区彩色标记扩展 | MIT | 再分发时保留 MIT 版权与许可文本 |
 | @tiptap/react 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记富文本编辑器（React 绑定） | MIT | 依赖 `@tiptap/core`、`@tiptap/pm` 等，全部 MIT |
 | @tiptap/starter-kit 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记编辑器的基础扩展集（段落、粗斜体、列表、引用、历史） | MIT | 同上 |
 

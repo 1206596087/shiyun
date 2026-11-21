@@ -1,13 +1,18 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import {
+  activateResearchTab,
+  closeResearchTab,
+  createResearchTab,
   ensureResearchView,
   navigateResearch,
   researchBack,
   researchForward,
   researchReload,
   researchState,
+  selectedResearchText,
   setResearchBounds,
   setResearchVisible,
+  setResearchZoom,
   type ResearchBounds,
 } from './researchView.ts'
 
@@ -54,6 +59,24 @@ export function registerResearchIpc(assertTrusted: AssertTrusted, getWindow: () 
       ensureResearchView(win)
       return researchState()
     }, null)
+  })
+
+  ipcMain.handle('research:createTab', (event, payload: unknown) => {
+    if (!assertTrusted(event.senderFrame?.url)) return null
+    if (payload !== undefined && (typeof payload !== 'string' || payload.length > 4096)) throw new TypeError('无效网页地址')
+    return withWindow((win) => { ensureResearchView(win); return createResearchTab(payload as string | undefined) }, null)
+  })
+
+  ipcMain.handle('research:closeTab', (event, payload: unknown) => {
+    if (!assertTrusted(event.senderFrame?.url)) return null
+    if (typeof payload !== 'string') throw new TypeError('无效标签 ID')
+    return closeResearchTab(payload)
+  })
+
+  ipcMain.handle('research:activateTab', (event, payload: unknown) => {
+    if (!assertTrusted(event.senderFrame?.url)) return null
+    if (typeof payload !== 'string') throw new TypeError('无效标签 ID')
+    return activateResearchTab(payload)
   })
 
   ipcMain.handle('research:setBounds', (event, payload: unknown) => {
@@ -106,6 +129,17 @@ export function registerResearchIpc(assertTrusted: AssertTrusted, getWindow: () 
       ensureResearchView(win)
       return researchReload()
     }, null)
+  })
+
+  ipcMain.handle('research:setZoom', (event, payload: unknown) => {
+    if (!assertTrusted(event.senderFrame?.url)) return null
+    if (typeof payload !== 'number' || !Number.isFinite(payload)) throw new TypeError('无效缩放比例')
+    return setResearchZoom(payload)
+  })
+
+  ipcMain.handle('research:selectedText', async (event) => {
+    if (!assertTrusted(event.senderFrame?.url)) return null
+    return selectedResearchText()
   })
 
   ipcMain.handle('research:state', (event) => {

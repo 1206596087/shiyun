@@ -42,7 +42,7 @@
   border-bottom: 1px solid var(--ws-line);
 }
 .ws-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.ws-brand__mark { display: grid; place-items: center; color: #3d3b35; }
+.ws-brand__mark { display: grid; place-items: center; filter: drop-shadow(0 2px 4px rgba(28, 26, 40, .16)); }
 .ws-brand__title { font-size: 19px; font-weight: 700; letter-spacing: .1em; }
 .ws-brand__sub { margin-left: 2px; color: var(--ws-faint); font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
 
@@ -112,6 +112,11 @@
   overflow: hidden;
 }
 .workspace-space.is-research-hidden .workspace-grid { grid-template-columns: var(--ws-left) 7px minmax(0, 1fr); }
+.workspace-space.research-layout-immersive .workspace-grid { grid-template-columns: minmax(0, 1fr); }
+.workspace-space.research-layout-immersive .workspace-grid > .ws-sidebar,
+.workspace-space.research-layout-immersive .workspace-grid > .reading-desk,
+.workspace-space.research-layout-immersive .workspace-grid > .ws-resizer { display: none; }
+.workspace-space.research-layout-immersive .research-sidebar { grid-column: 1; padding: 12px 22px 16px; }
 .ws-resizer { position: relative; cursor: col-resize; background: transparent; }
 .ws-resizer::after {
   content: ''; position: absolute; top: 12px; bottom: 12px; left: 3px; width: 1px;
@@ -338,7 +343,15 @@
 .empty-desk button:hover { background: var(--ws-hover); }
 
 /* ── 右侧网页研究栏 ───────────────────────────────────────────── */
-.research-sidebar { min-width: 0; display: flex; flex-direction: column; padding: 18px 16px 12px; overflow: hidden; }
+.research-sidebar { min-width: 0; display: flex; flex-direction: column; padding: 12px 12px 10px; overflow: hidden; }
+.research-tabs { display: flex; align-items: center; gap: 3px; min-height: 30px; margin-bottom: 7px; overflow-x: auto; scrollbar-width: thin; }
+.research-tab { flex: 0 1 180px; min-width: 82px; height: 28px; display: flex; align-items: center; gap: 2px; padding: 0 4px 0 2px; border-radius: 7px; color: var(--ws-muted); font-size: 11px; }
+.research-tab.is-active { background: var(--ws-paper); color: var(--ws-ink); box-shadow: inset 0 0 0 1px var(--ws-line-strong); }
+.research-tab__activate { flex: 1; min-width: 0; height: 100%; padding: 0 2px 0 7px; color: inherit; text-align: left; }
+.research-tab__activate span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.research-tab__close { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; color: var(--ws-faint); font-size: 14px; }
+.research-tab__close:hover { background: var(--ws-hover); color: var(--ws-ink); }
+.research-tabs .research-tab__new { flex: none; min-width: 28px; width: 28px; justify-content: center; padding: 0; font-size: 16px; }
 .research-nav { display: flex; align-items: center; gap: 2px; margin: 0 0 10px; }
 .research-nav button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 5px; color: #a8a39a; }
 .research-nav button:disabled { cursor: not-allowed; color: #cfcac0; }
@@ -359,6 +372,11 @@
 .research-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ws-muted); font: inherit; font-size: 12px; }
 .research-input button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 5px; color: #a8a39a; }
 .research-input button:disabled, .research-input input:disabled { cursor: not-allowed; }
+.research-layout-tools { display: flex; align-items: center; gap: 3px; min-height: 30px; margin-top: 7px; }
+.research-layout-tools button { height: 24px; padding: 0 7px; border-radius: 5px; color: var(--ws-muted); font-size: 10.5px; }
+.research-layout-tools button:hover, .research-layout-tools button.is-on { background: var(--ws-hover); color: var(--ws-ink); }
+.research-layout-tools > span { flex: 1; }
+.research-layout-tools small { min-width: 34px; color: var(--ws-faint); font-size: 10px; text-align: center; }
 
 .research-card { margin-top: 14px; padding: 15px 16px; border: 1px solid var(--ws-line-strong); border-radius: 8px; background: var(--ws-paper); }
 .research-card h3 { margin: 0; color: var(--ws-ink-2); font-size: 13px; font-weight: 500; }
@@ -368,9 +386,10 @@
 .research-copy { margin: 0 0 10px; color: var(--ws-muted); font-size: 12px; line-height: 1.9; }
 .research-copy--muted { color: var(--ws-faint); font-size: 11px; }
 
-.research-footer { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 18px; }
-.research-footer button { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: 6px; color: var(--ws-muted); font-size: 12px; }
-.research-footer button:hover { background: var(--ws-hover); color: var(--ws-ink); }
+.research-selection-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; padding-top: 8px; }
+.research-selection-actions button { display: flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 6px; color: var(--ws-muted); font-size: 11px; }
+.research-selection-actions button:hover:not(:disabled) { background: var(--ws-hover); color: var(--ws-ink); }
+.research-selection-actions button:disabled { color: #c8c3ba; cursor: not-allowed; }
 
 /* ── 窄窗口适配 ───────────────────────────────────────────────── */
 @media (max-width: 1180px) {
@@ -424,15 +443,25 @@
 .selection-toolbar {
   position: fixed; z-index: 40; display: flex; align-items: center; gap: 2px; padding: 4px 6px;
   border-radius: 8px; border: 1px solid var(--ws-line-strong); background: #fff;
-  box-shadow: 0 6px 22px rgba(60, 52, 36, .16); transform: translate(-8px, -6px);
+  box-shadow: 0 6px 22px rgba(60, 52, 36, .16); transform: translate(-50%, -6px);
 }
 .selection-toolbar button {
-  display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px;
-  border-radius: 6px; color: var(--ws-ink-2); font-size: 12px;
+  display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 7px;
+  border-radius: 5px; color: var(--ws-ink-2); font-size: 11.5px;
 }
 .selection-toolbar button:hover:not(:disabled) { background: var(--ws-hover); }
 .selection-toolbar button:disabled { color: #c3beb2; cursor: not-allowed; }
-.selection-toolbar > span { color: #d8d3c6; }
+.selection-toolbar__label { display: flex; align-items: center; gap: 4px; padding: 0 4px; color: var(--ws-muted); font-size: 11px; }
+.selection-toolbar__divider { width: 1px; height: 18px; margin: 0 3px; background: #ded9ce; }
+.selection-toolbar .selection-color { width: 18px; height: 18px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px #0001; }
+.selection-toolbar .selection-color.is-gold { background: #e2bc64; }
+.selection-toolbar .selection-color.is-rose { background: #dba0a0; }
+.selection-toolbar .selection-color.is-sage { background: #9ec2a7; }
+.selection-toolbar .selection-color:hover:not(:disabled) { transform: scale(1.1); }
+.selection-toolbar .selection-color.is-gold:hover:not(:disabled) { background: #e2bc64; }
+.selection-toolbar .selection-color.is-rose:hover:not(:disabled) { background: #dba0a0; }
+.selection-toolbar .selection-color.is-sage:hover:not(:disabled) { background: #9ec2a7; }
+.selection-toolbar .selection-toolbar__close { width: 24px; justify-content: center; padding: 0; color: var(--ws-faint); font-size: 15px; }
 
 .highlight-popover {
   position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 42;
@@ -479,6 +508,9 @@
   margin: 0 0 14px; padding: 8px 14px; border-left: 2px solid var(--ws-gold);
   background: var(--ws-gold-wash); color: #4a463c;
 }
+.note-editor__surface mark[data-color='gold'] { background: rgba(226, 188, 100, .46); }
+.note-editor__surface mark[data-color='rose'] { background: rgba(219, 160, 160, .42); }
+.note-editor__surface mark[data-color='sage'] { background: rgba(158, 194, 167, .44); }
 /* 空正文提示：TipTap 的 Placeholder 扩展还没装，这里用一条可点的覆盖层代替，
    选择器比 `.workspace-space button` 的透明底更具体，否则会被重置掉。 */
 .note-editor .note-editor__empty {
