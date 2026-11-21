@@ -21,6 +21,9 @@ button { border: 0; cursor: pointer; }
 .mode-switch button { position: relative; min-width: 72px; padding: 8px 15px; border-radius: 8px; background: transparent; color: #7f8aa8; font-size: 12px; letter-spacing: .12em; transition: .25s ease; }
 .mode-switch button.active { color: #eef2ff; background: linear-gradient(180deg, rgba(112,133,208,.24), rgba(75,89,160,.12)); box-shadow: inset 0 0 0 1px rgba(152,177,255,.13), 0 0 24px rgba(104,114,255,.1); }
 .mode-switch button.active::after { content: ''; position: absolute; left: 33%; right: 33%; bottom: 2px; height: 1px; background: #9eb9ff; box-shadow: 0 0 8px #819cff; }
+.universe-location { display:flex; flex-direction:column; align-items:center; gap:3px; min-width:172px; padding:8px 18px; border:1px solid rgba(145,164,224,.14); border-radius:12px; background:rgba(3,6,20,.58); color:#e9edff; }
+.universe-location span { font-size:12px; letter-spacing:.16em; }
+.universe-location small { color:#74809f; font-size:8px; letter-spacing:.08em; }
 .view-actions { justify-self: end; display: flex; gap: 8px; }
 .view-actions button { height: 38px; min-width: 62px; padding: 0 10px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 9px; border: 1px solid rgba(147,170,233,.13); background: rgba(8,11,29,.52); color: #a6b0cb; transition: .2s ease; }
 .view-actions button:hover { background: rgba(76,91,151,.22); color: #edf1ff; border-color: rgba(164,186,255,.27); }
@@ -51,6 +54,39 @@ button { border: 0; cursor: pointer; }
 .data-actions button, .note-form button { padding: 7px 5px; border-radius: 7px; border: 1px solid rgba(143,164,226,.12); background: rgba(35,44,83,.32); color: #9ca9c8; font-size: 9px; }
 .data-actions button:hover, .note-form button:hover { color:#edf2ff; background: rgba(77,94,160,.34); }
 .prototype-note { margin: 9px 2px 0; color: #59637e; font-size: 8px; line-height: 1.4; }
+
+.galaxy-navigator { position:absolute; z-index:12; top:124px; left:28px; width:min(310px,calc(100vw - 56px)); max-height:calc(100vh - 190px); padding:14px; border-radius:15px; overflow-y:auto; }
+.galaxy-navigator > header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.galaxy-navigator > header p { margin:0 0 3px; color:#6f7d9f; font-size:8px; letter-spacing:.16em; }
+.galaxy-navigator > header h2 { margin:0; color:#e5ebff; font-size:15px; font-weight:500; }
+.galaxy-navigator > header button { width:30px; height:30px; border:1px solid rgba(146,169,233,.17); border-radius:8px; background:rgba(65,79,139,.24); color:#cbd6f5; font-size:16px; }
+.galaxy-navigator > header button:disabled { opacity:.35; cursor:not-allowed; }
+.galaxy-navigator__list { display:grid; gap:4px; }
+.galaxy-navigator__list > button { display:grid; grid-template-columns:10px 1fr auto; align-items:center; gap:9px; width:100%; padding:8px 9px; border:1px solid transparent; border-radius:8px; background:rgba(9,13,34,.36); text-align:left; }
+.galaxy-navigator__list > button:hover,.galaxy-navigator__list > button.is-active { border-color:rgba(143,165,230,.18); background:rgba(62,76,134,.25); }
+.galaxy-navigator__list i { width:7px; height:7px; border-radius:50%; }
+.galaxy-navigator__list span { min-width:0; }
+.galaxy-navigator__list b { display:block; overflow:hidden; color:#dce4fb; font-size:10px; font-weight:500; text-overflow:ellipsis; white-space:nowrap; }
+.galaxy-navigator__list small { display:block; margin-top:2px; color:#677490; font-size:8px; }
+.galaxy-navigator__list em { color:#697693; font-size:8px; font-style:normal; }
+.galaxy-navigator__editor { display:grid; gap:7px; margin-top:10px; padding:10px; border:1px solid rgba(141,164,224,.11); border-radius:9px; background:rgba(1,4,15,.45); }
+.galaxy-navigator__editor label { display:grid; grid-template-columns:52px 1fr; align-items:center; gap:7px; color:#75819f; font-size:8px; }
+.galaxy-navigator__editor input,.galaxy-navigator__editor textarea { min-width:0; padding:7px 8px; border:1px solid rgba(144,164,221,.14); border-radius:6px; outline:0; resize:vertical; color:#e0e7fb; background:rgba(2,5,17,.72); font:inherit; font-size:9px; }
+.galaxy-navigator__editor input[type='color'] { height:29px; padding:3px; }
+.galaxy-navigator__editor div { display:flex; gap:5px; }
+.galaxy-navigator__editor button { flex:1; padding:7px; border:1px solid rgba(143,164,226,.13); border-radius:6px; background:rgba(62,78,140,.28); color:#b9c6e6; font-size:8px; }
+.galaxy-navigator__editor button:disabled { opacity:.35; cursor:not-allowed; }
+.galaxy-navigator__editor .is-danger { color:#d697a7; background:rgba(132,46,70,.12); }
+.galaxy-navigator__editor > small,.galaxy-navigator__demo { margin:0; color:#56617c; font-size:8px; line-height:1.5; }
+.galaxy-connection-detail { display:grid; gap:5px; margin-top:10px; padding:10px; border-top:1px solid rgba(141,164,224,.11); }
+.galaxy-connection-detail p,.galaxy-connection-detail strong,.galaxy-connection-detail small { margin:0; }
+.galaxy-connection-detail p { color:#7584aa; font-size:8px; letter-spacing:.12em; }
+.galaxy-connection-detail strong { color:#dce6ff; font-size:11px; font-weight:500; }
+.galaxy-connection-detail small { color:#65718f; font-size:8px; line-height:1.55; }
+.galaxy-overview-label { display:grid; justify-items:center; gap:2px; min-width:86px; padding:5px 8px; border:1px solid rgba(164,184,247,.14); border-radius:7px; background:rgba(3,6,19,.68); color:#e9edff; box-shadow:0 10px 30px rgba(0,0,0,.28); white-space:nowrap; }
+.galaxy-overview-label.is-selected { border-color:rgba(224,213,169,.45); box-shadow:0 0 22px rgba(171,151,255,.2); }
+.galaxy-overview-label strong { font-size:9px; font-weight:500; letter-spacing:.08em; }
+.galaxy-overview-label span { color:#6f7a98; font-size:7px; }
 .note-form { display: grid; gap: 7px; margin-top: 10px; padding: 9px; border-radius: 9px; background: rgba(1,4,15,.5); border: 1px solid rgba(138,159,224,.1); }
 .note-form input, .note-form textarea, .note-form select, .relation-editor textarea, .relation-editor select { width: 100%; padding: 8px; border: 1px solid rgba(144,164,221,.14); border-radius: 7px; outline: 0; resize: vertical; color: #dfe6fa; background: rgba(2,5,17,.72); font-size: 10px; }
 .note-form div { display:flex; gap:5px; }.note-form div button { flex:1; }
@@ -80,6 +116,12 @@ button { border: 0; cursor: pointer; }
 .candidate-button { width:100%; padding:9px; border-radius:8px; border:1px solid rgba(133,158,233,.14); background:rgba(57,71,125,.22); color:#98a8d1; font-size:10px; }.candidate-button.active{color:#dce5ff;border-color:rgba(150,174,255,.35);background:rgba(83,104,176,.3)}
 .associations { margin-top:18px; }.associations h3,.relation-editor h3{display:flex;justify-content:space-between;margin:0 0 8px;color:#8f9bb7;font-size:10px;font-weight:500;letter-spacing:.08em}.associations h3 span,.relation-editor h3 span{color:#63708f}
 .associations > button { width:100%; padding:8px 5px; display:flex; justify-content:space-between; border-top:1px solid rgba(139,159,214,.07); background:transparent; text-align:left; font-size:10px; color:#acb7d1; }.associations > button:hover{color:#fff}.associations small{color:#63708e;font-size:8px}
+.galaxy-memberships { display:grid; gap:5px; margin-top:15px; padding-top:13px; border-top:1px solid rgba(145,165,222,.1); }
+.galaxy-memberships h3 { display:flex; justify-content:space-between; margin:0 0 3px; color:#8f9bb7; font-size:10px; font-weight:500; letter-spacing:.08em; }
+.galaxy-memberships h3 span { color:#63708f; font-size:8px; }
+.galaxy-memberships label { display:grid; grid-template-columns:15px 7px 1fr; align-items:center; gap:6px; color:#aeb9d2; font-size:9px; }
+.galaxy-memberships input { margin:0; accent-color:#859cf0; }
+.galaxy-memberships i { width:6px; height:6px; border-radius:50%; box-shadow:0 0 7px currentColor; }
 .link-endpoints { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:6px; margin:16px 0; }.link-endpoints button{padding:9px 5px;border-radius:7px;background:rgba(56,68,116,.24);color:#b8c4df;font-size:9px}.link-endpoints span{color:#657291}
 .danger-button{width:100%;padding:9px;border-radius:8px;background:rgba(143,47,73,.13);border:1px solid rgba(224,99,127,.15);color:#d88c9d;font-size:9px}
 .source-button{width:100%;margin-bottom:14px;padding:9px;border-radius:8px;border:1px solid rgba(214,178,110,.26);background:rgba(120,94,44,.18);color:#e8c98d;font-size:10px}

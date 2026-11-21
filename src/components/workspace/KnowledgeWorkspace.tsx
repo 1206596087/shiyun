@@ -6,7 +6,7 @@ import { WorkspaceHeader } from './WorkspaceHeader'
 import { clampWidth, sanitizeWorkspaceUi } from './workspaceLayout'
 import { DEFAULT_WORKSPACE_UI, type WorkspaceOpenTarget, type WorkspaceTab, type WorkspaceUiState } from '../../types/workspace'
 import type { KnowledgeGraphData } from '../../types/knowledge'
-import type { LibraryCounts, LibraryNodeKind, LibraryTree } from '../../types/library'
+import type { LibraryCounts, LibraryFolder, LibraryNodeKind, LibraryTree } from '../../types/library'
 import { getLibraryBridge, type LibraryBridge, type LibraryMode } from '../../data/libraryBridge'
 import { getAnnotationBridge } from '../../data/annotationBridge'
 import { readableNoteTitle, type Highlight } from '../../types/annotation'
@@ -50,6 +50,31 @@ function describeError(error: unknown): string {
   return String(error)
 }
 
+function collectLibraryIds(tree: LibraryTree): { folders: Set<string>; nodes: Set<string> } {
+  const folders = new Set<string>()
+  const nodes = new Set<string>(tree.uncategorized.map((book) => book.id))
+  const nodesForFolder = (folder: LibraryFolder) => {
+    folders.add(folder.id)
+    folder.children.forEach((child) => {
+      nodes.add(child.id)
+      if (child.kind === 'folder') nodesForFolder(child)
+    })
+  }
+  const visitRoots = (roots: LibraryFolder[]) => roots.forEach((folder) => {
+    nodes.add(folder.id)
+    nodesForFolder(folder)
+  })
+  visitRoots(tree.folders)
+  return { folders, nodes }
+}
+
+function importFolderId(tree: LibraryTree, selectedId: string | null): string | null {
+  if (!selectedId) return null
+  const ids = collectLibraryIds(tree)
+  if (ids.folders.has(selectedId)) return selectedId
+  return findBook(tree, selectedId)?.folderId ?? null
+}
+
 interface Props {
   active: boolean
   graph: KnowledgeGraphData
@@ -73,6 +98,25 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
   const [focusMap, setFocusMap] = useState<Record<string, ReaderFocus>>({})
   const [researchLayout, setResearchLayout] = useState<ResearchLayout>(loadResearchLayout)
   const [researchRequest, setResearchRequest] = useState<(ResearchRequest & { token: number }) | null>(null)
+
+  const acceptLibrary = useCallback((tree: LibraryTree) => {
+    setLibrary(tree)
+    const valid = collectLibraryIds(tree)
+    setState((current) => {
+      const tabs = current.tabs.filter((tab) => tab.kind !== 'book' || valid.nodes.has(tab.id))
+      return {
+        ...current,
+        tabs,
+        activeTabId: tabs.some((tab) => tab.id === current.activeTabId)
+          ? current.activeTabId
+          : tabs.at(-1)?.id ?? null,
+        selectedFolderId: current.selectedFolderId && valid.nodes.has(current.selectedFolderId)
+          ? current.selectedFolderId
+          : null,
+        expandedFolderIds: current.expandedFolderIds.filter((id) => valid.folders.has(id)),
+      }
+    })
+  }, [])
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
   useEffect(() => localStorage.setItem(RESEARCH_LAYOUT_KEY, researchLayout), [researchLayout])
@@ -104,14 +148,14 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
       }
       try {
         const tree = await bridge.listTree()
-        if (!cancelled) setLibrary(tree)
+        if (!cancelled) acceptLibrary(tree)
       } catch (error) {
         if (!cancelled) setNotice(`书库读取失败：${describeError(error)}`)
       }
     }
     void boot()
     return () => { cancelled = true }
-  }, [bridge])
+  }, [acceptLibrary, bridge])
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -170,7 +214,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
     const current = bridgeRef.current
     if (!current) return
     try {
-      setLibrary(await current.listTree())
+      acceptLibrary(await current.listTree())
     } catch {
       // 刷新失败不影响正在看的页面，下一次操作会再试
     }
@@ -178,11 +222,11 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
 
   useEffect(() => {
     const changed = () => {
-      void bridgeRef.current?.listTree().then(setLibrary)
+      void bridgeRef.current?.listTree().then(acceptLibrary)
     }
     window.addEventListener('shiyun-library-changed', changed)
     return () => window.removeEventListener('shiyun-library-changed', changed)
-  }, [])
+  }, [acceptLibrary])
 
   /** 笔记标签页的 id 就是笔记 ID；标题取「显式标题 → 正文首行」。 */
   const openNoteTab = async (noteId: string) => {
@@ -294,7 +338,7 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
     if (!bridge) return
     setBusy(true)
     try {
-      setLibrary(await action(bridge))
+      acceptLibrary(await action(bridge))
       setNotice(null)
     } catch (error) {
       setNotice(`${label}失败：${describeError(error)}`)
@@ -318,9 +362,9 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode, 
     }
     setBusy(true)
     try {
-      const report = await bridge.importBook(state.selectedFolderId)
+      const report = await bridge.importBook(importFolderId(tree, state.selectedFolderId))
       if (report) {
-        setLibrary(report.tree)
+        acceptLibrary(report.tree)
         setNotice(report.imported > 0
           ? `已导入 ${report.imported} 本${report.skipped > 0 ? `，${report.skipped} 本已在书库里` : ''}`
           : `这些文件已在书库里（${report.skipped} 本），没有重复导入`)

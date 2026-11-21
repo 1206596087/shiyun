@@ -160,7 +160,7 @@ CREATE TABLE app_settings (
 | --- | --- |
 | 删除书籍 | `books.deleted_at` 置位（进回收站）；`highlights` 随书籍物理删除时才级联；`notes` **绝不**级联删除 |
 | 删除划线 | 删除 `highlights` 行与 `highlight_notes` 关联行；`notes` 保留，变成"无划线笔记" |
-| 删除笔记 | 软删除 `notes`；`highlight_notes` 关联行删除；划线保留 |
+| 删除笔记 | 软删除 `notes`；`highlight_notes` 关联行保留以便恢复；划线保留 |
 | 删除关系 | 只删 `knowledge_links` 行，两端实体不变 |
 | 删除文件夹 | 软删除文件夹；子文件夹随之隐藏；书籍 `folder_id` 置空并落到「未分类」，不删除书籍 |
 
@@ -193,3 +193,13 @@ M2 首次启动时：
 笔记软删保留 highlight_notes；计数只统计未删除笔记。restoreNote 清空 deleted_at，索引自动恢复。旧版本已硬删的关联不能自动还原。结构回退应使用迁移前快照在独立目录恢复，不直接改已应用迁移。
 
 数据库备份及完整导出使用 VACUUM INTO 一致性快照，替代早期 checkpoint 后直接复制方案。完整包还包括管理的文件，参见 docs/BUNDLE_RECOVERY.md。
+
+# 0.6.0 多银河基础迁移（版本 3，按用户优先级提前）
+
+- `galaxies`：星系身份、名称、说明、颜色和默认标志；默认星系不可删除。
+- `galaxy_layouts`：每个星系一行三维位置、尺度、密度、旋臂数、紧密度和旋转速度，删除星系时级联删除。
+- `galaxy_memberships`：`(galaxy_id, node_id)` 复合主键；`node_id` 是统一投影 ID，不复制书、划线或笔记实体。
+- 新知识节点没有任何成员关系时由 `ensureDefaultMemberships()` 幂等加入默认星系。移除最后一个成员关系或删除星系产生孤儿时同样回到默认星系。
+- 删除星系绝不删除 `books / highlights / notes / knowledge_links`。完整知识库导出通过数据库快照自然包含这三张表。
+
+导入书籍时，来自另一台电脑或旧演示状态的失效 `folder_id` 会在写库前校验并降级为 `NULL`（未分类），避免把 UI 状态问题暴露为 SQLite 外键错误。

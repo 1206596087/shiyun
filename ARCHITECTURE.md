@@ -253,3 +253,11 @@ M6 接入 `WebContentsView` 时需要在主进程创建独立的 webContents，�
 `maintenanceIpc.ts` 管理设置、回收站和导出；所有调用校验 IPC 来源，目录打开只接受 data/logs 枚举。`fileResponse.ts` 用文件句柄逐块读取，取消时释放句柄。`ReaderPane` 按格式懒加载阅读器。`002_note_search` 在主进程用 FTS5 trigram 与触发器维护笔记索引。`bundle.ts` 从安全快照生成带 manifest 的流式包；离线恢复脚本只创建新目录。
 
 桌面验证可显式设置 `SHIYUN_DATA_DIR`，默认用户目录规则不变。后续章节保留早期架构沿革，早期 better-sqlite3 计划已由 node:sqlite 替代。
+
+# 多银河宇宙增量
+
+`App.tsx` 增加 `overview / inside` 两级状态。总览由 `UniverseScene` 单独渲染，每个星系只有按画质限制的低细节点云；进入后卸载总览 Canvas，并把 `filterGraphForGalaxy()` 得到的成员子图交给原有 `GalaxyScene`。因此没有重写或复制单银河的粒子、知识节点和相机算法，也不会同时为全部星系创建完整知识层。
+
+桌面数据流为 `galaxy:* IPC → libraryService → db/galaxies.ts`。`GalaxyMembership` 只引用投影后的稳定知识节点 ID，同一笔记加入多个星系不会复制 `notes` 行。删除非默认星系只删除集合、布局和成员关系；失去全部归属的节点会回到默认星系。宇宙光带由 `aggregateIntergalacticConnections()` 聚合已有 `knowledge_links`，不生成随机业务关系。
+
+浏览器预览没有 SQLite，只会根据原型节点生成明确标注的临时星系；它不能编辑正式星系。星系拖动只在松手时写数据库。镜头进入保留动画，同时有 1.8 秒状态兜底，避免后台窗口或低帧设备因收不到“到达”帧而无法进入。

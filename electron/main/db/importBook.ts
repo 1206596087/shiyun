@@ -5,6 +5,7 @@ import { basename, extname, join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { BookFormat, LibraryBook } from '../../../src/types/library.ts'
 import type { DataPaths } from './paths.ts'
+import { queryOne } from './connection.ts'
 import { findBookByHash, insertBook } from './library.ts'
 
 const EXTENSIONS: Record<string, BookFormat> = { '.pdf': 'pdf', '.epub': 'epub' }
@@ -63,6 +64,15 @@ export async function importBookFromPath(
   const existing = findBookByHash(db, fileHash)
   if (existing) return { book: null, duplicate: existing }
 
+  // 工作区状态会跨系统、跨知识库保存在 localStorage。旧环境里选中的
+  // 文件夹 ID 在当前数据库中可能不存在；有效书籍应安全落到“未分类”，
+  // 而不是暴露一个 SQLite 外键错误并取消整次导入。
+  const resolvedFolderId = folderId && queryOne<{ id: string }>(
+    db,
+    'SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL',
+    folderId,
+  ) ? folderId : null
+
   const bookId = `book-${randomUUID()}`
   const bookDir = join(paths.booksDir, bookId)
   await mkdir(bookDir, { recursive: true })
@@ -83,7 +93,7 @@ export async function importBookFromPath(
       filePath: relativePath,
       fileHash,
       fileSize: copiedStat.size,
-      folderId,
+      folderId: resolvedFolderId,
     })
     return { book, duplicate: null }
   } catch (error) {

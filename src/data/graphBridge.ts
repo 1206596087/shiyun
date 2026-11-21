@@ -1,4 +1,6 @@
 import type { KnowledgeGraphData } from '../types/knowledge'
+import type { CreateGalaxyInput, GalaxyPositionInput, GalaxyUniverse, UpdateGalaxyInput } from '../types/universe'
+import { prototypeUniverseFromGraph } from './universeProjection'
 
 /**
  * 银河图的数据入口。
@@ -18,6 +20,12 @@ export interface GraphBridge {
   pin: (nodeId: string, position: { x: number; y: number; z: number }) => Promise<boolean>
   /** 取消固定，回到自动布局。 */
   unpin: (nodeId: string) => Promise<boolean>
+  loadUniverse: (graph: KnowledgeGraphData) => Promise<GalaxyUniverse>
+  createGalaxy: (input: CreateGalaxyInput) => Promise<GalaxyUniverse | null>
+  updateGalaxy: (galaxyId: string, patch: UpdateGalaxyInput) => Promise<GalaxyUniverse | null>
+  moveGalaxy: (galaxyId: string, position: GalaxyPositionInput) => Promise<GalaxyUniverse | null>
+  setMembership: (galaxyId: string, nodeId: string, included: boolean) => Promise<GalaxyUniverse | null>
+  deleteGalaxy: (galaxyId: string) => Promise<GalaxyUniverse | null>
 }
 
 const prototypeBridge: GraphBridge = {
@@ -25,6 +33,12 @@ const prototypeBridge: GraphBridge = {
   load: async () => null,
   pin: async () => false,
   unpin: async () => false,
+  loadUniverse: async (graph) => prototypeUniverseFromGraph(graph),
+  createGalaxy: async () => null,
+  updateGalaxy: async () => null,
+  moveGalaxy: async () => null,
+  setMembership: async () => null,
+  deleteGalaxy: async () => null,
 }
 
 export function getGraphBridge(): GraphBridge {
@@ -38,5 +52,11 @@ export function getGraphBridge(): GraphBridge {
       return true
     },
     unpin: (nodeId) => api.unpin(nodeId),
+    loadUniverse: () => api.loadUniverse(),
+    createGalaxy: (input) => api.createGalaxy(input),
+    updateGalaxy: (galaxyId, patch) => api.updateGalaxy(galaxyId, patch),
+    moveGalaxy: (galaxyId, position) => api.moveGalaxy(galaxyId, position),
+    setMembership: (galaxyId, nodeId, included) => api.setMembership(galaxyId, nodeId, included),
+    deleteGalaxy: (galaxyId) => api.deleteGalaxy(galaxyId),
   }
 }

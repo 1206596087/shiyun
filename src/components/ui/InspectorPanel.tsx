@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KnowledgeGraphData, KnowledgeLink, KnowledgeNode } from '../../types/knowledge'
+import type { GalaxyUniverse } from '../../types/universe'
 
 interface Props {
   graph: KnowledgeGraphData
@@ -12,6 +13,8 @@ interface Props {
   onSelectNode: (id: string) => void
   /** 把这本书 / 这条划线 / 这篇笔记送回书房原文（M5 验收 D）。 */
   onOpenSource: (node: KnowledgeNode) => void
+  universe?: GalaxyUniverse | null
+  onSetMembership?: (galaxyId: string, nodeId: string, included: boolean) => void
   onClose: () => void
 }
 
@@ -49,6 +52,21 @@ export function InspectorPanel(props: Props) {
           <button className={`candidate-button ${props.relationCandidates.includes(props.selectedNode.id) ? 'active' : ''}`} onClick={() => props.onToggleCandidate(props.selectedNode!.id)}>
             {props.relationCandidates.includes(props.selectedNode.id) ? '✓ 已选为关系端点' : '＋ 选为关系端点'}
           </button>
+          {props.universe && props.onSetMembership && (
+            <div className="galaxy-memberships">
+              <h3>所属星系 <span>可多选</span></h3>
+              {props.universe.galaxies.map((galaxy) => {
+                const checked = props.universe!.memberships.some((item) => item.galaxyId === galaxy.id && item.nodeId === props.selectedNode!.id)
+                return (
+                  <label key={galaxy.id}>
+                    <input type="checkbox" checked={checked} onChange={(event) => props.onSetMembership!(galaxy.id, props.selectedNode!.id, event.target.checked)} />
+                    <i style={{ background: galaxy.color }} />
+                    <span>{galaxy.name}</span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
           <div className="associations">
             <h3>关联对象 <span>{associations.length}</span></h3>
             {associations.map((link) => {

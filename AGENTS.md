@@ -128,3 +128,5 @@ M4 已经落地的东西不要重做：划线定位（页码 + 归一化矩形 /
 当前在 macOS 的 `/Users/cc/Documents/ChatGPT/project1/shiyun` 接续，Windows 路径与旧验收记录只属历史。按 prompt3 末尾修订推进 0.2.0；真实状态见 docs/0.2.0-validation.md。现有源码来自 GitHub 压缩包，本地 Git 基线 e92e14c 不是远端历史，不可强制推送覆盖 GitHub。
 
 数据库已新增 002 索引迁移；笔记软删必须保留关联。测试桌面用独立 SHIYUN_DATA_DIR，绝不把测试数据写入真实书库。`scripts/e2e/desktop-smoke.mjs` 连接本机 9337 端口，仅允许 shiyun-desktop-validation 测试目录。运行 Electron 前移除 ELECTRON_RUN_AS_NODE。离线还原脚本只接受新目录。
+
+数据库现已到版本 3，新增多银河三表。`UniverseScene` 只负责低细节总览，进入后仍用 `GalaxyScene`；不要把总览点云变成知识实体，也不要在多个星系间复制笔记。`db/galaxies.ts` 的默认归属与删除回迁语义有仓储测试保护。导入书籍必须继续容忍跨设备遗留的失效文件夹 ID并落到未分类。下一项优先做 PDF 连续滚动实验模式，不要把单页模式删掉。

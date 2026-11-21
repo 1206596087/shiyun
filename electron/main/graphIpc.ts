@@ -1,5 +1,15 @@
 import { ipcMain } from 'electron'
-import { knowledgeGraph, pinGraphNode, unpinGraphNode } from './libraryService.ts'
+import {
+  addGalaxy,
+  changeGalaxyMembership,
+  editGalaxy,
+  galaxyUniverse,
+  knowledgeGraph,
+  moveGalaxy,
+  pinGraphNode,
+  removeGalaxy,
+  unpinGraphNode,
+} from './libraryService.ts'
 
 type TrustCheck = (url: string) => void
 
@@ -17,6 +27,13 @@ function asString(record: Record<string, unknown>, key: string): string {
 function asNumber(record: Record<string, unknown>, key: string): number {
   const value = record[key]
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new TypeError(`参数 ${key} 必须是有限数字`)
+  return value
+}
+
+function asOptionalString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new TypeError(`参数 ${key} 必须是字符串`)
   return value
 }
 
@@ -46,5 +63,56 @@ export function registerGraphIpc(assertTrusted: TrustCheck) {
     assertTrusted(event.senderFrame?.url ?? '')
     unpinGraphNode(asString(asRecord(payload), 'nodeId'))
     return true
+  })
+
+  ipcMain.handle('galaxy:list', (event) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    return galaxyUniverse()
+  })
+
+  ipcMain.handle('galaxy:create', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    const record = asRecord(payload)
+    return addGalaxy({
+      name: asString(record, 'name'),
+      description: asOptionalString(record, 'description'),
+      color: asOptionalString(record, 'color'),
+    })
+  })
+
+  ipcMain.handle('galaxy:update', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    const record = asRecord(payload)
+    return editGalaxy(asString(record, 'galaxyId'), {
+      name: asOptionalString(record, 'name'),
+      description: asOptionalString(record, 'description'),
+      color: asOptionalString(record, 'color'),
+    })
+  })
+
+  ipcMain.handle('galaxy:move', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    const record = asRecord(payload)
+    return moveGalaxy(asString(record, 'galaxyId'), {
+      x: asNumber(record, 'x'),
+      y: asNumber(record, 'y'),
+      z: asNumber(record, 'z'),
+    })
+  })
+
+  ipcMain.handle('galaxy:membership', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    const record = asRecord(payload)
+    if (typeof record.included !== 'boolean') throw new TypeError('参数 included 必须是布尔值')
+    return changeGalaxyMembership(
+      asString(record, 'galaxyId'),
+      asString(record, 'nodeId'),
+      record.included,
+    )
+  })
+
+  ipcMain.handle('galaxy:delete', (event, payload: unknown) => {
+    assertTrusted(event.senderFrame?.url ?? '')
+    return removeGalaxy(asString(asRecord(payload), 'galaxyId'))
   })
 }

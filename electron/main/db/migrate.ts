@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { queryAll, queryOne } from './connection.ts'
 import { migration001 } from './migrations/001_init.ts'
 import { migration002 } from './migrations/002_note_search.ts'
+import { migration003 } from './migrations/003_galaxies.ts'
 
 export interface Migration {
   version: number
@@ -14,7 +15,7 @@ export interface Migration {
  *
  * 只进不退：已发布的迁移不允许修改，只能追加新版本（DATABASE_SCHEMA.md 第 5 节）。
  */
-export const migrations: readonly Migration[] = [migration001, migration002]
+export const migrations: readonly Migration[] = [migration001, migration002, migration003]
 
 function ensureLedger(db: DatabaseSync) {
   db.exec(`

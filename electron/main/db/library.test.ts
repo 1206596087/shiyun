@@ -36,14 +36,14 @@ afterEach(() => {
 describe('迁移', () => {
   it('首次运行应用 001，重复运行不再重复应用', () => {
     // beforeEach 里已经跑过一次
-    expect(currentVersion(db)).toBe(2)
+    expect(currentVersion(db)).toBe(3)
     expect(pendingVersions(db)).toEqual([])
 
     const again = runMigrations(db)
     expect(again).toEqual([])
 
     const rows = queryOne<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM schema_migrations')
-    expect(rows?.count).toBe(2)
+    expect(rows?.count).toBe(3)
   })
 })
 
@@ -150,6 +150,17 @@ describe('导入书籍', () => {
     expect(second.duplicate?.id).toBe(first.book!.id)
 
     expect(countLibrary(db).books).toBe(1)
+  })
+
+  it('跨设备保留的旧文件夹选择失效时，书籍安全导入到未分类', async () => {
+    const paths = resolveDataPaths(workDir)
+    const source = join(workDir, '跨设备导入.pdf')
+    writeFileSync(source, '%PDF-1.7\n%%EOF\n')
+
+    const result = await importBookFromPath(db, paths, source, 'folder-from-another-device')
+
+    expect(result.book?.folderId).toBeNull()
+    expect(result.book?.title).toBe('跨设备导入')
   })
 
   it('不支持的文件类型直接拒绝', async () => {

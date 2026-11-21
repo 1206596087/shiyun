@@ -11,6 +11,7 @@ import type {
 } from '../../src/types/annotation.ts'
 import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
 import type { ResearchBounds, ResearchState } from '../../src/types/research.ts'
+import type { CreateGalaxyInput, GalaxyPositionInput, GalaxyUniverse, UpdateGalaxyInput } from '../../src/types/universe.ts'
 
 export interface LibraryMeta {
   dataDir: string
@@ -70,6 +71,12 @@ export interface ShiyunGraphApi {
   load: () => Promise<KnowledgeGraphData>
   pin: (nodeId: string, position: { x: number; y: number; z: number }) => Promise<{ nodeId: string; x: number; y: number; z: number }>
   unpin: (nodeId: string) => Promise<boolean>
+  loadUniverse: () => Promise<GalaxyUniverse>
+  createGalaxy: (input: CreateGalaxyInput) => Promise<GalaxyUniverse>
+  updateGalaxy: (galaxyId: string, patch: UpdateGalaxyInput) => Promise<GalaxyUniverse>
+  moveGalaxy: (galaxyId: string, position: GalaxyPositionInput) => Promise<GalaxyUniverse>
+  setMembership: (galaxyId: string, nodeId: string, included: boolean) => Promise<GalaxyUniverse>
+  deleteGalaxy: (galaxyId: string) => Promise<GalaxyUniverse>
 }
 
 /** 研究栏（M6）：只上报矩形与导航意图，真正的 WebContentsView 在主进程里。 */
@@ -139,6 +146,12 @@ const graph: ShiyunGraphApi = {
   load: () => ipcRenderer.invoke('graph:load'),
   pin: (nodeId, position) => ipcRenderer.invoke('graph:pin', { nodeId, ...position }),
   unpin: (nodeId) => ipcRenderer.invoke('graph:unpin', { nodeId }),
+  loadUniverse: () => ipcRenderer.invoke('galaxy:list'),
+  createGalaxy: (input) => ipcRenderer.invoke('galaxy:create', input),
+  updateGalaxy: (galaxyId, patch) => ipcRenderer.invoke('galaxy:update', { galaxyId, ...patch }),
+  moveGalaxy: (galaxyId, position) => ipcRenderer.invoke('galaxy:move', { galaxyId, ...position }),
+  setMembership: (galaxyId, nodeId, included) => ipcRenderer.invoke('galaxy:membership', { galaxyId, nodeId, included }),
+  deleteGalaxy: (galaxyId) => ipcRenderer.invoke('galaxy:delete', { galaxyId }),
 }
 
 const research: ShiyunResearchApi = {

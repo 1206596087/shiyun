@@ -1,17 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { GalaxyScene } from './components/galaxy/GalaxyScene'
+import { UniverseScene } from './components/galaxy/UniverseScene'
 import { DebugPanel } from './components/ui/DebugPanel'
 import { InspectorPanel } from './components/ui/InspectorPanel'
 import { KnowledgeExplorer } from './components/ui/KnowledgeExplorer'
 import { TopBar } from './components/ui/TopBar'
+import { GalaxyNavigator } from './components/ui/GalaxyNavigator'
 import { KnowledgeWorkspace } from './components/workspace/KnowledgeWorkspace'
 import { loadKnowledgeGraph, saveKnowledgeGraph, validateKnowledgeGraph } from './data/knowledgeRepository'
 import { entityIdOf } from './data/graphProjection'
 import { getGraphBridge, type GraphMode } from './data/graphBridge'
+import { aggregateIntergalacticConnections, filterGraphForGalaxy } from './data/universeProjection'
 import type { GraphLayout, KnowledgeLink, KnowledgeNode, KnowledgeNodeType } from './types/knowledge'
 import { DEFAULT_GALAXY_CONFIG, type GalaxyConfig, type ViewMode } from './types/galaxy'
 import type { WorkspaceOpenTarget } from './types/workspace'
+import type { GalaxyUniverse } from './types/universe'
 import { hashString, mulberry32 } from './utils/random'
 
 const ALL_TYPES = new Set<KnowledgeNodeType>(['topic', 'book', 'highlight', 'note'])
@@ -37,6 +41,13 @@ function App() {
   const [notice, setNotice] = useState('')
   const [dragActive, setDragActive] = useState(false)
   const [openTarget, setOpenTarget] = useState<WorkspaceOpenTarget | null>(null)
+  const [universe, setUniverse] = useState<GalaxyUniverse | null>(null)
+  const [galaxyLevel, setGalaxyLevel] = useState<'overview' | 'inside'>('overview')
+  const [activeGalaxyId, setActiveGalaxyId] = useState<string | null>(null)
+  const [selectedGalaxyId, setSelectedGalaxyId] = useState<string | null>(null)
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
+  const [enteringGalaxyId, setEnteringGalaxyId] = useState<string | null>(null)
+  const enterGalaxyTimer = useRef<number | null>(null)
   // 桌面版：星图由 SQLite 投影；浏览器演示版：仍是 localStorage 里的原型图谱。
   const graphBridge = useMemo(() => getGraphBridge(), [])
   const graphMode: GraphMode = graphBridge.mode
@@ -69,9 +80,30 @@ function App() {
     return () => { cancelled = true }
   }, [graphBridge, graphMode])
 
+  useEffect(() => {
+    let cancelled = false
+    void graphBridge.loadUniverse(graph).then((next) => {
+      if (cancelled) return
+      setUniverse(next)
+      setSelectedGalaxyId((current) => current && next.galaxies.some((item) => item.id === current) ? current : next.galaxies[0]?.id ?? null)
+      setActiveGalaxyId((current) => current && next.galaxies.some((item) => item.id === current) ? current : null)
+    }).catch((error) => {
+      if (!cancelled) setNotice(error instanceof Error ? `知识宇宙读取失败：${error.message}` : '知识宇宙读取失败')
+    })
+    return () => { cancelled = true }
+  }, [graph, graphBridge])
+
+  useEffect(() => () => {
+    if (enterGalaxyTimer.current !== null) window.clearTimeout(enterGalaxyTimer.current)
+  }, [])
+
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null
   const selectedLink = graph.links.find((link) => link.id === selectedLinkId) ?? null
-  const nodeCount = graph.nodes.length
+  const currentGalaxy = universe?.galaxies.find((item) => item.id === activeGalaxyId) ?? null
+  const currentGraph = galaxyLevel === 'inside' && universe && activeGalaxyId
+    ? filterGraphForGalaxy(graph, universe, activeGalaxyId)
+    : graph
+  const intergalacticConnections = universe ? aggregateIntergalacticConnections(graph, universe) : []
 
   /**
    * 书库改过（新建文件夹、导入书、写划线/笔记）之后重新投影一次。
@@ -151,6 +183,98 @@ function App() {
     setFocusPosition(null)
     setMode('universe')
     setResetToken((value) => value + 1)
+  }
+
+  const enterGalaxy = useCallback((galaxyId: string) => {
+    if (enterGalaxyTimer.current !== null) {
+      window.clearTimeout(enterGalaxyTimer.current)
+      enterGalaxyTimer.current = null
+    }
+    setActiveGalaxyId(galaxyId)
+    setSelectedGalaxyId(galaxyId)
+    setSelectedConnectionId(null)
+    setEnteringGalaxyId(null)
+    setGalaxyLevel('inside')
+    setSelectedNodeId(null)
+    setSelectedLinkId(null)
+    setMode('universe')
+    setFocusPosition(null)
+    setResetToken((value) => value + 1)
+  }, [])
+
+  const requestEnterGalaxy = useCallback((galaxyId: string) => {
+    setSelectedGalaxyId(galaxyId)
+    setEnteringGalaxyId(galaxyId)
+    if (enterGalaxyTimer.current !== null) window.clearTimeout(enterGalaxyTimer.current)
+    // 后台窗口或低性能设备可能拿不到足够的 WebGL 帧来触发“镜头到达”。
+    // 动画照常播放，但最迟 1.8 秒一定进入，避免按钮看起来失效。
+    enterGalaxyTimer.current = window.setTimeout(() => enterGalaxy(galaxyId), 1800)
+  }, [enterGalaxy])
+
+  const returnToUniverse = () => {
+    if (enterGalaxyTimer.current !== null) {
+      window.clearTimeout(enterGalaxyTimer.current)
+      enterGalaxyTimer.current = null
+    }
+    setGalaxyLevel('overview')
+    setActiveGalaxyId(null)
+    setEnteringGalaxyId(null)
+    setSelectedNodeId(null)
+    setSelectedLinkId(null)
+    setFocusPosition(null)
+  }
+
+  const moveGalaxyLocally = useCallback((id: string, position: [number, number, number]) => {
+    setUniverse((current) => current ? {
+      ...current,
+      layouts: current.layouts.map((layout) => layout.galaxyId === id
+        ? { ...layout, x: position[0], y: position[1], z: position[2] }
+        : layout),
+    } : current)
+  }, [])
+
+  const finishMoveGalaxy = useCallback((id: string, position: [number, number, number]) => {
+    moveGalaxyLocally(id, position)
+    if (graphMode !== 'library') return
+    void graphBridge.moveGalaxy(id, { x: position[0], y: position[1], z: position[2] })
+      .then((next) => { if (next) setUniverse(next) })
+      .catch((error) => setNotice(error instanceof Error ? `星系位置保存失败：${error.message}` : '星系位置保存失败'))
+  }, [graphBridge, graphMode, moveGalaxyLocally])
+
+  const createUniverseGalaxy = (input: { name: string; color: string }) => {
+    const previousIds = new Set(universe?.galaxies.map((galaxy) => galaxy.id) ?? [])
+    void graphBridge.createGalaxy(input).then((next) => {
+      if (!next) return
+      setUniverse(next)
+      const created = next.galaxies.find((galaxy) => !previousIds.has(galaxy.id))
+      setSelectedGalaxyId(created?.id ?? null)
+      setNotice(created ? `已创建星系「${created.name}」` : '星系已创建')
+    }).catch((error) => setNotice(error instanceof Error ? `创建星系失败：${error.message}` : '创建星系失败'))
+  }
+
+  const updateUniverseGalaxy = (galaxyId: string, patch: { name?: string; description?: string; color?: string }) => {
+    void graphBridge.updateGalaxy(galaxyId, patch).then((next) => {
+      if (next) setUniverse(next)
+      setNotice('星系信息已保存')
+    }).catch((error) => setNotice(error instanceof Error ? `保存星系失败：${error.message}` : '保存星系失败'))
+  }
+
+  const deleteUniverseGalaxy = (galaxyId: string) => {
+    const target = universe?.galaxies.find((item) => item.id === galaxyId)
+    if (!target || !window.confirm(`删除星系「${target.name}」？其中的书籍、划线和笔记都会保留，并回到默认星系。`)) return
+    void graphBridge.deleteGalaxy(galaxyId).then((next) => {
+      if (!next) return
+      setUniverse(next)
+      setSelectedGalaxyId(next.galaxies[0]?.id ?? null)
+      setNotice('星系已删除，原始知识对象保持不变')
+    }).catch((error) => setNotice(error instanceof Error ? `删除星系失败：${error.message}` : '删除星系失败'))
+  }
+
+  const setNodeGalaxyMembership = (galaxyId: string, nodeId: string, included: boolean) => {
+    void graphBridge.setMembership(galaxyId, nodeId, included).then((next) => {
+      if (next) setUniverse(next)
+      setNotice(included ? '已加入星系' : '已从星系移除；无归属知识会回到默认星系')
+    }).catch((error) => setNotice(error instanceof Error ? `更新星系成员失败：${error.message}` : '更新星系成员失败'))
   }
 
   const toggleType = (type: KnowledgeNodeType) => {
@@ -250,47 +374,80 @@ function App() {
       .catch((error) => setNotice(error instanceof Error ? `固定位置失败：${error.message}` : '固定位置失败'))
   }
 
-  const statistics = useMemo(() => ({ links: graph.links.length, nodes: nodeCount }), [graph.links.length, nodeCount])
-
   return (
     <div className="shiyun-root">
     <main className={`app-shell galaxy-space space-layer mode-${mode} ${activeSpace === 'galaxy' ? 'is-active' : 'is-inactive'}`} aria-hidden={activeSpace !== 'galaxy'}>
-      <GalaxyScene
-        active={activeSpace === 'galaxy'}
-        config={config}
-        graph={graph}
-        mode={mode}
-        paused={paused || activeSpace === 'workspace'}
-        selectedNodeId={selectedNodeId}
-        selectedLinkId={selectedLinkId}
-        visibleTypes={visibleTypes}
-        focusPosition={focusPosition}
-        resetToken={resetToken}
-        onSelectNode={(id) => selectNode(id)}
-        onSelectLink={(id) => { setSelectedLinkId(id); setSelectedNodeId(null); if (mode === 'universe') setMode('knowledge') }}
-        onFocusNode={handleNodeFocus}
-        onClearSelection={resetView}
-        dragActive={dragActive}
-        onNodeDrag={moveNode}
-        onNodeDragEnd={finishMoveNode}
-        onDragStateChange={setDragActive}
-      />
+      {galaxyLevel === 'overview' && universe ? (
+        <UniverseScene
+          active={activeSpace === 'galaxy'}
+          config={config}
+          universe={universe}
+          connections={intergalacticConnections}
+          paused={paused || activeSpace === 'workspace'}
+          selectedGalaxyId={selectedGalaxyId}
+          selectedConnectionId={selectedConnectionId}
+          enteringGalaxyId={enteringGalaxyId}
+          onSelectGalaxy={(id) => { setSelectedGalaxyId(id); setSelectedConnectionId(null) }}
+          onSelectConnection={(id) => { setSelectedConnectionId(id); setSelectedGalaxyId(null) }}
+          onRequestEnter={requestEnterGalaxy}
+          onEnterGalaxy={enterGalaxy}
+          onMoveGalaxy={moveGalaxyLocally}
+          onMoveGalaxyEnd={finishMoveGalaxy}
+          onClearSelection={() => { setSelectedGalaxyId(null); setSelectedConnectionId(null) }}
+        />
+      ) : (
+        <GalaxyScene
+          active={activeSpace === 'galaxy'}
+          config={config}
+          graph={currentGraph}
+          mode={mode}
+          paused={paused || activeSpace === 'workspace'}
+          selectedNodeId={selectedNodeId}
+          selectedLinkId={selectedLinkId}
+          visibleTypes={visibleTypes}
+          focusPosition={focusPosition}
+          resetToken={resetToken}
+          onSelectNode={(id) => selectNode(id)}
+          onSelectLink={(id) => { setSelectedLinkId(id); setSelectedNodeId(null); if (mode === 'universe') setMode('knowledge') }}
+          onFocusNode={handleNodeFocus}
+          onClearSelection={resetView}
+          dragActive={dragActive}
+          onNodeDrag={moveNode}
+          onNodeDragEnd={finishMoveNode}
+          onDragStateChange={setDragActive}
+        />
+      )}
       <div className="vignette" />
-      <TopBar mode={mode} paused={paused} onMode={setMode} onReset={resetView} onPause={() => setPaused((value) => !value)} onEnterWorkspace={() => setActiveSpace('workspace')} />
-      <KnowledgeExplorer
-        graph={graph}
-        source={graphMode}
-        visibleTypes={visibleTypes}
-        onToggleType={toggleType}
-        onSelect={selectNode}
-        onAddNote={addNote}
-        onExport={exportJson}
-        onImport={importJson}
-        onRefresh={() => { void refreshGraph() }}
-      />
+      <TopBar mode={mode} paused={paused} universeOverview={galaxyLevel === 'overview'} currentGalaxyName={currentGalaxy?.name}
+        onMode={setMode} onReset={resetView} onPause={() => setPaused((value) => !value)} onUniverseOverview={returnToUniverse} onEnterWorkspace={() => setActiveSpace('workspace')} />
+      {galaxyLevel === 'overview' && universe ? (
+        <GalaxyNavigator
+          universe={universe}
+          selectedGalaxyId={selectedGalaxyId}
+          selectedConnection={intergalacticConnections.find((item) => item.id === selectedConnectionId) ?? null}
+          editable={graphMode === 'library'}
+          onSelect={(id) => { setSelectedGalaxyId(id); setSelectedConnectionId(null) }}
+          onEnter={requestEnterGalaxy}
+          onCreate={createUniverseGalaxy}
+          onUpdate={updateUniverseGalaxy}
+          onDelete={deleteUniverseGalaxy}
+        />
+      ) : (
+        <KnowledgeExplorer
+          graph={currentGraph}
+          source={graphMode}
+          visibleTypes={visibleTypes}
+          onToggleType={toggleType}
+          onSelect={selectNode}
+          onAddNote={addNote}
+          onExport={exportJson}
+          onImport={importJson}
+          onRefresh={() => { void refreshGraph() }}
+        />
+      )}
       <DebugPanel config={config} onChange={setConfig} />
-      <InspectorPanel
-        graph={graph}
+      {galaxyLevel === 'inside' && <InspectorPanel
+        graph={currentGraph}
         selectedNode={selectedNode}
         selectedLink={selectedLink}
         relationCandidates={relationCandidates}
@@ -299,16 +456,18 @@ function App() {
         onDeleteRelation={deleteRelation}
         onSelectNode={(id) => selectNode(id)}
         onOpenSource={(node) => openInWorkspace(node)}
+        universe={universe}
+        onSetMembership={setNodeGalaxyMembership}
         onClose={() => { setSelectedNodeId(null); setSelectedLinkId(null) }}
-      />
+      />}
       <div className="status-strip">
         <span className="status-dot" /> WebGL 实时渲染 <i />
-        {graphMode === 'library' ? '书库投影' : '浏览器存储'} <i />
-        {statistics.nodes} 个知识节点 <i /> {statistics.links} 条关系
+        {galaxyLevel === 'overview' ? '多银河宇宙总览' : currentGalaxy?.name ?? '星系内部'} <i />
+        {galaxyLevel === 'overview' ? `${universe?.galaxies.length ?? 0} 个星系 · ${intergalacticConnections.length} 条星际光带` : `${currentGraph.nodes.length} 个知识节点 · ${currentGraph.links.length} 条关系`}
       </div>
       <div className="interaction-hint">
         <span>左键旋转</span><span>滚轮缩放</span><span>右键平移</span>
-        <span>{graphMode === 'library' ? '拖动星辰固定位置 · 双击回原文' : '双击星辰聚焦'}</span>
+        <span>{galaxyLevel === 'overview' ? '拖动星系调整位置 · 双击进入' : graphMode === 'library' ? '拖动星辰固定位置 · 双击回原文' : '双击星辰聚焦'}</span>
       </div>
       {notice && <div className="toast">{notice}</div>}
     </main>
@@ -317,7 +476,12 @@ function App() {
       graph={graph}
       openTarget={openTarget}
       onReturnGalaxy={() => { setActiveSpace('galaxy'); void refreshGraph() }}
-      onOpenNode={(id) => { setActiveSpace('galaxy'); focusNode(id) }}
+      onOpenNode={(id) => {
+        const membership = universe?.memberships.find((item) => item.nodeId === id)
+        if (membership) enterGalaxy(membership.galaxyId)
+        setActiveSpace('galaxy')
+        window.setTimeout(() => focusNode(id), 60)
+      }}
     />
     </div>
   )

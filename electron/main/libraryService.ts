@@ -24,6 +24,15 @@ import { resolveDataPaths, type DataPaths } from './db/paths.ts'
 import { importPrototypeGraph, prototypeImportState } from './db/prototypeImport.ts'
 import { loadKnowledgeGraph, releaseLayout, savePinnedLayout } from './db/graph.ts'
 import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
+import type { CreateGalaxyInput, GalaxyPositionInput, GalaxyUniverse, UpdateGalaxyInput } from '../../src/types/universe.ts'
+import {
+  createGalaxy,
+  deleteGalaxy,
+  loadGalaxyUniverse,
+  saveGalaxyPosition,
+  setGalaxyMembership,
+  updateGalaxy,
+} from './db/galaxies.ts'
 
 let db: DatabaseSync | null = null
 let paths: DataPaths | null = null
@@ -257,4 +266,46 @@ export function pinGraphNode(nodeId: string, position: { x: number; y: number; z
 export function unpinGraphNode(nodeId: string): void {
   const { db: connection } = requireLibrary()
   releaseLayout(connection, nodeId)
+}
+
+function currentUniverse(connection: DatabaseSync): GalaxyUniverse {
+  const { graph } = loadKnowledgeGraph(connection)
+  return loadGalaxyUniverse(connection, graph)
+}
+
+export function galaxyUniverse(): GalaxyUniverse {
+  const { db: connection } = requireLibrary()
+  return currentUniverse(connection)
+}
+
+export function addGalaxy(input: CreateGalaxyInput): GalaxyUniverse {
+  const { db: connection } = requireLibrary()
+  createGalaxy(connection, input)
+  return currentUniverse(connection)
+}
+
+export function editGalaxy(galaxyId: string, patch: UpdateGalaxyInput): GalaxyUniverse {
+  const { db: connection } = requireLibrary()
+  updateGalaxy(connection, galaxyId, patch)
+  return currentUniverse(connection)
+}
+
+export function moveGalaxy(galaxyId: string, position: GalaxyPositionInput): GalaxyUniverse {
+  const { db: connection } = requireLibrary()
+  saveGalaxyPosition(connection, galaxyId, position)
+  return currentUniverse(connection)
+}
+
+export function changeGalaxyMembership(galaxyId: string, nodeId: string, included: boolean): GalaxyUniverse {
+  const { db: connection } = requireLibrary()
+  const graph = loadKnowledgeGraph(connection).graph
+  if (!graph.nodes.some((node) => node.id === nodeId)) throw new Error('知识节点不存在')
+  setGalaxyMembership(connection, galaxyId, nodeId, included)
+  return loadGalaxyUniverse(connection, graph)
+}
+
+export function removeGalaxy(galaxyId: string): GalaxyUniverse {
+  const { db: connection } = requireLibrary()
+  deleteGalaxy(connection, galaxyId)
+  return currentUniverse(connection)
 }
