@@ -34,7 +34,10 @@ export function MaintenancePanel({ onClose }: { onClose: () => void }) {
       {!api && <p>浏览器演示模式无法访问本地书库。请使用桌面应用。</p>}
       {status && api && <>
         <p>数据目录：{status.dataDir}</p><p>日志目录：{status.logDir}</p>
-        <p>数据库版本：{status.schemaVersion} · 最近备份：{status.lastBackupAt ? new Date(status.lastBackupAt).toLocaleString() : '暂无'}</p>
+        <p>
+          数据库版本：{status.schemaVersion} · 完整性：{status.integrity === 'ok' ? '正常' : '异常'} · 最近备份：
+          {status.lastBackupAt ? new Date(status.lastBackupAt).toLocaleString() : '暂无'}
+        </p>
         <p>启动时检查自动备份，间隔 24 小时，保留最近 14 份数据库快照。</p>
         <button disabled={busy} onClick={() => void run(() => api.openDirectory('data'))}>打开数据目录</button>
         <button disabled={busy} onClick={() => void run(() => api.openDirectory('logs'))}>打开日志目录</button>

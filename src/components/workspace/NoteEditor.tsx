@@ -2,11 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { NoteHighlight } from './noteHighlight'
+import { FORMULA_EDIT_EVENT, FormulaBlock, FormulaInline, type FormulaEditRequest } from './formulaExtension'
+import { FormulaDialog, type FormulaKind } from './FormulaDialog'
+import { EmojiDialog } from './EmojiDialog'
 import type { AnnotationBridge } from '../../data/annotationBridge'
 import type { Highlight, Note } from '../../types/annotation'
 import { describeLocator, readableNoteTitle } from '../../types/annotation'
 import { IconBook, IconHighlight, IconLink, IconNote, IconPlus } from './icons'
-import { researchSearchUrl, translationUrl } from '../../data/selectionActions'
+import {
+  adaptNoteSelection,
+  executeSelectionAction,
+  type SharedSelectionAction,
+  type UnifiedSelection,
+} from '../../data/selectionService'
 
 interface Props {
   noteId: string
@@ -173,9 +181,12 @@ interface BodyProps {
 function NoteEditorBody(props: BodyProps) {
   const { note, annotations } = props
   const [empty, setEmpty] = useState(note.bodyText.trim().length === 0)
-  const [selected, setSelected] = useState<{ text: string; x: number; y: number } | null>(null)
+  const [selected, setSelected] = useState<UnifiedSelection | null>(null)
+  const [formulaInsert, setFormulaInsert] = useState<{ displayMode: boolean; kind: FormulaKind } | null>(null)
+  const [formulaEdit, setFormulaEdit] = useState<FormulaEditRequest | null>(null)
+  const [emojiOpen, setEmojiOpen] = useState(false)
   const editor = useEditor({
-    extensions: [StarterKit, NoteHighlight],
+    extensions: [StarterKit, NoteHighlight, FormulaInline, FormulaBlock],
     content: parseBody(note),
     editorProps: {
       attributes: {
@@ -192,6 +203,21 @@ function NoteEditorBody(props: BodyProps) {
     },
   })
 
+  useEffect(() => {
+    if (!selected) return
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null)
+    }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [selected])
+
+  useEffect(() => {
+    const editFormula = (event: Event) => setFormulaEdit((event as CustomEvent<FormulaEditRequest>).detail)
+    window.addEventListener(FORMULA_EDIT_EVENT, editFormula)
+    return () => window.removeEventListener(FORMULA_EDIT_EVENT, editFormula)
+  }, [])
+
   const captureSelection = () => {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !editor) { setSelected(null); return }
@@ -200,12 +226,23 @@ function NoteEditorBody(props: BodyProps) {
     const text = selection.toString().trim()
     if (!text) { setSelected(null); return }
     const rect = range.getBoundingClientRect()
-    setSelected({ text: text.slice(0, 2000), x: rect.left + rect.width / 2, y: rect.top })
+    setSelected(adaptNoteSelection(
+      props.noteId,
+      text,
+      { x: rect.left + rect.width / 2, y: rect.top },
+      { from: editor.state.selection.from, to: editor.state.selection.to },
+    ))
   }
 
-  const openResearch = (url: string) => {
-    window.dispatchEvent(new CustomEvent('shiyun-research-open', { detail: { url, newTab: true } }))
-    setSelected(null)
+  const runSharedSelectionAction = (action: SharedSelectionAction) => {
+    if (!selected) return
+    void executeSelectionAction(action, selected, {
+      copyText: (text) => navigator.clipboard.writeText(text),
+      openResearch: (request) => {
+        window.dispatchEvent(new CustomEvent('shiyun-research-open', { detail: request }))
+        setSelected(null)
+      },
+    })
   }
 
   return (
@@ -248,6 +285,11 @@ function NoteEditorBody(props: BodyProps) {
         >”</button>
         <button onClick={() => editor?.chain().focus().undo().run()} title="撤销">↺</button>
         <button onClick={() => editor?.chain().focus().redo().run()} title="重做">↻</button>
+        <span className="note-format__divider" />
+        <button onClick={() => setFormulaInsert({ displayMode: false, kind: 'math' })} title="插入行内公式">ƒx</button>
+        <button onClick={() => setFormulaInsert({ displayMode: true, kind: 'math' })} title="插入块级公式">∑</button>
+        <button className="note-format__chemistry" onClick={() => setFormulaInsert({ displayMode: true, kind: 'chemistry' })} title="插入化学方程式">化学</button>
+        <button onClick={() => setEmojiOpen(true)} title="插入 Emoji 或特殊符号">☺</button>
       </div>
 
       <div className="note-editor" onMouseUp={captureSelection} onTouchEnd={captureSelection}>
@@ -266,7 +308,7 @@ function NoteEditorBody(props: BodyProps) {
       {selected && (
         <div
           className="selection-toolbar"
-          style={{ left: Math.max(190, Math.min(window.innerWidth - 190, selected.x)), top: Math.max(56, selected.y - 52) }}
+          style={{ left: Math.max(190, Math.min(window.innerWidth - 190, selected.anchor.x)), top: Math.max(56, selected.anchor.y - 52) }}
           role="toolbar"
           aria-label="笔记选区工具栏"
           onMouseDown={(event) => event.preventDefault()}
@@ -277,11 +319,52 @@ function NoteEditorBody(props: BodyProps) {
               onClick={() => { editor?.chain().focus().toggleMark('selectionHighlight', { color }).run(); setSelected(null) }} />
           ))}
           <span className="selection-toolbar__divider" />
-          <button onClick={() => void navigator.clipboard.writeText(selected.text)}>复制</button>
-          <button onClick={() => openResearch(translationUrl(selected.text))}>翻译</button>
-          <button onClick={() => openResearch(researchSearchUrl(selected.text))}>搜索</button>
+          <button onClick={() => runSharedSelectionAction('copy')}>复制</button>
+          <button onClick={() => runSharedSelectionAction('translate')}>翻译</button>
+          <button onClick={() => runSharedSelectionAction('search')}>搜索</button>
           <button className="selection-toolbar__close" onClick={() => setSelected(null)} aria-label="关闭">×</button>
         </div>
+      )}
+
+      {formulaInsert && (
+        <FormulaDialog
+          displayMode={formulaInsert.displayMode}
+          initialKind={formulaInsert.kind}
+          onClose={() => setFormulaInsert(null)}
+          onSave={(latex, formulaKind) => {
+            const type = formulaInsert.displayMode ? 'formulaBlock' : 'formulaInline'
+            editor?.chain().focus().insertContent({ type, attrs: { latex, formulaKind } }).run()
+            setFormulaInsert(null)
+          }}
+        />
+      )}
+
+      {formulaEdit && (
+        <FormulaDialog
+          displayMode={formulaEdit.displayMode}
+          initialLatex={formulaEdit.latex}
+          initialKind={formulaEdit.formulaKind}
+          onClose={() => setFormulaEdit(null)}
+          onSave={(latex, formulaKind) => {
+            editor?.chain().focus().command(({ state, tr }) => {
+              const node = state.doc.nodeAt(formulaEdit.pos)
+              if (!node || (node.type.name !== 'formulaInline' && node.type.name !== 'formulaBlock')) return false
+              tr.setNodeMarkup(formulaEdit.pos, undefined, { ...node.attrs, latex, formulaKind })
+              return true
+            }).run()
+            setFormulaEdit(null)
+          }}
+        />
+      )}
+
+      {emojiOpen && (
+        <EmojiDialog
+          onClose={() => setEmojiOpen(false)}
+          onInsert={(value) => {
+            editor?.chain().focus().insertContent(value).run()
+            setEmojiOpen(false)
+          }}
+        />
       )}
 
       <section className="note-links" aria-label="关联的划线">

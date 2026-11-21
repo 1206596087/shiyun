@@ -13,6 +13,7 @@ import {
   setResearchBounds,
   setResearchVisible,
   setResearchZoom,
+  setResearchUserAgentMode,
   type ResearchBounds,
 } from './researchView.ts'
 
@@ -135,6 +136,13 @@ export function registerResearchIpc(assertTrusted: AssertTrusted, getWindow: () 
     if (!assertTrusted(event.senderFrame?.url)) return null
     if (typeof payload !== 'number' || !Number.isFinite(payload)) throw new TypeError('无效缩放比例')
     return setResearchZoom(payload)
+  })
+
+  ipcMain.handle('research:setUserAgentMode', (event, mode: unknown, compact: unknown) => {
+    if (!assertTrusted(event.senderFrame?.url)) return null
+    if (mode !== 'auto' && mode !== 'mobile' && mode !== 'desktop') throw new TypeError('无效网页适配模式')
+    if (typeof compact !== 'boolean') throw new TypeError('无效网页布局状态')
+    return setResearchUserAgentMode(mode, compact)
   })
 
   ipcMain.handle('research:selectedText', async (event) => {

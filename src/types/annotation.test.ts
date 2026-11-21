@@ -114,6 +114,20 @@ describe('plainTextFromTiptap', () => {
     expect(plainTextFromTiptap('纯文本笔记')).toBe('纯文本笔记')
     expect(plainTextFromTiptap('')).toBe('')
   })
+
+  it('把行内、块级和化学公式的 LaTeX 纳入搜索纯文本', () => {
+    const body = JSON.stringify({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [
+          { type: 'text', text: '质能关系 ' },
+          { type: 'formulaInline', attrs: { latex: 'E=mc^2', formulaKind: 'math' } },
+        ] },
+        { type: 'formulaBlock', attrs: { latex: '\\ce{2H2 + O2 -> 2H2O}', formulaKind: 'chemistry' } },
+      ],
+    })
+    expect(plainTextFromTiptap(body)).toBe('质能关系 E=mc^2\n\\ce{2H2 + O2 -> 2H2O}')
+  })
 })
 
 describe('describeLocator', () => {

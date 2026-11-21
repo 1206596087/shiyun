@@ -203,3 +203,9 @@ M2 首次启动时：
 - 删除星系绝不删除 `books / highlights / notes / knowledge_links`。完整知识库导出通过数据库快照自然包含这三张表。
 
 导入书籍时，来自另一台电脑或旧演示状态的失效 `folder_id` 会在写库前校验并降级为 `NULL`（未分类），避免把 UI 状态问题暴露为 SQLite 外键错误。
+
+# 0.4.0 公式与 Emoji 的持久化说明
+
+本增量没有数据库迁移。公式作为 TipTap `notes.body` JSON 中的 `formulaInline / formulaBlock` 节点保存，属性为 `latex` 与 `formulaKind`；`body_text` 同步保留 LaTeX，供现有 FTS5 索引检索。Emoji 与特殊符号直接保存 Unicode 文本。完整知识库导出通过数据库快照自然包含它们。
+
+启动完成迁移后执行 `PRAGMA integrity_check`，异常时拒绝继续以避免向损坏库写入；设置页状态使用 `PRAGMA quick_check` 展示健康状态。该自检不改表结构。

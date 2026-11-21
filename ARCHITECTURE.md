@@ -267,3 +267,11 @@ M6 接入 `WebContentsView` 时需要在主进程创建独立的 webContents，�
 `PdfReader` 保留原单页渲染路径，并按用户显式开关懒挂 `PdfContinuousView`。连续视图为全书建立轻量页面占位，以便页码和滚动条可定位；`pdfRenderWindow()` 只允许当前页前后各 1 页挂载 `PdfPageSurface`。每个表面独立持有 canvas、透明文本层和高亮层，离开窗口时取消 PDF.js render task 并把 canvas 尺寸归零。
 
 页码按钮、目录与外部划线定位通过 `scrollRequest` 滚动到目标占位；滚动容器反向计算最近页面并回报既有 `onProgress`，因此数据库仍只保存 `page / zoom`，没有新增迁移。实验偏好只在渲染进程保存，首次使用仍进入原单页模式。
+
+# 0.3 / 0.4 选区、网页适配与专业笔记增量
+
+`selectionService.ts` 定义 PDF、EPUB、笔记共用的选区对象和复制/翻译/搜索动作；各阅读器只负责生成稳定定位。网页仍由主进程按用户动作读取选区，不向不可信页面挂 preload。
+
+研究标签把 `auto / mobile / desktop` 存在主进程的标签状态中。紧凑布局下 `auto` 使用移动 UA，扩展/沉浸布局恢复启动时捕获的桌面 UA；切换后只重载当前 http(s) 页面。安全分区、sandbox、权限拒绝和 URL 白名单均未改变。
+
+专业笔记继续复用 TipTap：`formulaInline / formulaBlock` 原子节点只持久化 `latex / formulaKind`；KaTeX/mhchem 在节点出现时动态渲染，MathLive 只在编辑弹窗打开时加载。Emoji Mart 的组件、中文词条与本地数据也只在面板打开时加载。第三方 Web Component 使用独立空挂载点，不能替换 React 管理的子节点。

@@ -1,4 +1,4 @@
-import type { ResearchBounds, ResearchState } from '../types/research.ts'
+import type { ResearchBounds, ResearchState, ResearchUserAgentMode } from '../types/research.ts'
 
 /**
  * 研究栏的渲染侧桥接。
@@ -23,6 +23,7 @@ export interface ResearchBridge {
   forward: () => Promise<ResearchState | null>
   reload: () => Promise<ResearchState | null>
   setZoom: (zoom: number) => Promise<ResearchState | null>
+  setUserAgentMode: (mode: ResearchUserAgentMode, compact: boolean) => Promise<ResearchState | null>
   selectedText: () => Promise<{ text: string; title: string; url: string } | null>
   getState: () => Promise<ResearchState | null>
   onState: (listener: (state: ResearchState) => void) => () => void
@@ -43,6 +44,7 @@ const demoBridge: ResearchBridge = {
   forward: noop,
   reload: noop,
   setZoom: noop,
+  setUserAgentMode: noop,
   selectedText: noop,
   getState: noop,
   onState: () => () => undefined,

@@ -10,7 +10,7 @@ import type {
   UpdateNoteInput,
 } from '../../src/types/annotation.ts'
 import type { KnowledgeGraphData } from '../../src/types/knowledge.ts'
-import type { ResearchBounds, ResearchState } from '../../src/types/research.ts'
+import type { ResearchBounds, ResearchState, ResearchUserAgentMode } from '../../src/types/research.ts'
 import type { CreateGalaxyInput, GalaxyPositionInput, GalaxyUniverse, UpdateGalaxyInput } from '../../src/types/universe.ts'
 
 export interface LibraryMeta {
@@ -92,6 +92,7 @@ export interface ShiyunResearchApi {
   forward: () => Promise<ResearchState | null>
   reload: () => Promise<ResearchState | null>
   setZoom: (zoom: number) => Promise<ResearchState | null>
+  setUserAgentMode: (mode: ResearchUserAgentMode, compact: boolean) => Promise<ResearchState | null>
   selectedText: () => Promise<{ text: string; title: string; url: string } | null>
   getState: () => Promise<ResearchState | null>
   /** 主进程推来的导航状态（加载完成、标题变化、出错）。返回取消订阅函数。 */
@@ -166,6 +167,7 @@ const research: ShiyunResearchApi = {
   forward: () => ipcRenderer.invoke('research:forward'),
   reload: () => ipcRenderer.invoke('research:reload'),
   setZoom: (zoom) => ipcRenderer.invoke('research:setZoom', zoom),
+  setUserAgentMode: (mode, compact) => ipcRenderer.invoke('research:setUserAgentMode', mode, compact),
   selectedText: () => ipcRenderer.invoke('research:selectedText'),
   getState: () => ipcRenderer.invoke('research:state'),
   onState: (listener) => {

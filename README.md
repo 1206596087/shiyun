@@ -259,3 +259,7 @@ docs/screenshots/       # README 截图
 跨设备遗留的失效文件夹选择不会再使 PDF/EPUB 导入触发外键错误：目标目录不存在时安全导入到“未分类”，书房启动时也会清理无效的旧标签和目录状态。
 
 当前为开发候选，尚未完成 Windows 和复杂教材性能验收。详见 [开发验证记录](docs/0.2.0-validation.md) 与 [知识库恢复说明](docs/BUNDLE_RECOVERY.md)。下文 M0–M7 是原版本历史说明，不代表 prompt2 中所有细项已完整验收。
+
+本次 Windows 接续还完成了三项后续增量：研究标签在「自动」模式下会让紧凑栏请求手机响应式网页，扩展/沉浸布局恢复桌面网页，并可逐标签强制手机或桌面；PDF / EPUB / 笔记已接到同一 `SelectionActionService`；TipTap 笔记支持行内/块级 LaTeX、mhchem 化学方程式、MathLive 可视化编辑，以及离线 Emoji / 特殊符号面板。公式源数据随笔记 JSON 保存，LaTeX 同时进入全文搜索；KaTeX、MathLive、Emoji 数据都按需加载。
+
+Windows 开发预览已重新打包到 `release/win-unpacked/诗云.exe`。直接双击它即可启动，不需要 PowerShell；该目录是未签名的 unpacked 开发包，不是安装器。

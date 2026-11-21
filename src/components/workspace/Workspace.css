@@ -347,6 +347,8 @@
 .note-format { display: flex; align-items: center; gap: 2px; padding: 6px 0; margin-bottom: 14px; border-top: 1px solid var(--ws-line); border-bottom: 1px solid var(--ws-line); }
 .note-format button { width: 30px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: #b3aea3; font-size: 12px; }
 .note-format button:disabled { cursor: not-allowed; }
+.note-format__divider { width: 1px; height: 18px; margin: 0 5px; background: var(--ws-line); }
+.note-format .note-format__chemistry { width: 38px; font-size: 10px; }
 .note-page textarea {
   flex: 1; width: 100%; min-height: 260px; padding: 4px 0; border: 0; outline: 0; resize: none;
   background: transparent; color: #312f2a; font-family: inherit; font-size: 14px; line-height: 2.05;
@@ -524,6 +526,44 @@
   margin: 0 0 14px; padding: 8px 14px; border-left: 2px solid var(--ws-gold);
   background: var(--ws-gold-wash); color: #4a463c;
 }
+.note-formula { position: relative; color: #39352e; cursor: default; border-radius: 5px; }
+.note-formula--inline { display: inline-flex; align-items: center; margin: 0 3px; padding: 1px 4px; vertical-align: baseline; }
+.note-formula--block { display: flex; justify-content: center; align-items: center; min-height: 54px; margin: 14px 0; padding: 12px 34px 12px 12px; background: #fbfaf7; border: 1px solid #ebe6dc; }
+.note-formula.is-selected { outline: 2px solid rgba(114, 105, 88, .25); }
+.note-formula__render { min-width: 1em; }
+.note-formula__edit { position: absolute; top: 4px; right: 5px; padding: 2px 5px; border-radius: 4px; color: var(--ws-faint); font-size: 9px; opacity: 0; }
+.note-formula:hover .note-formula__edit, .note-formula:focus-within .note-formula__edit { opacity: 1; }
+.formula-dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(29, 27, 24, .26); backdrop-filter: blur(2px); }
+.formula-dialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; padding: 18px; border: 1px solid #ddd7cc; border-radius: 14px; background: #fffefa; box-shadow: 0 18px 60px rgba(41, 37, 31, .2); }
+.formula-dialog header, .formula-dialog footer { display: flex; align-items: center; gap: 9px; }
+.formula-dialog header { justify-content: space-between; margin-bottom: 14px; }
+.formula-dialog header > div { display: grid; gap: 2px; }
+.formula-dialog header small { color: var(--ws-muted); font-size: 10px; font-weight: 400; }
+.formula-dialog header > button { width: 28px; height: 28px; border-radius: 7px; font-size: 17px; }
+.formula-dialog__kind, .formula-dialog__symbols { display: flex; flex-wrap: wrap; gap: 6px; }
+.formula-dialog__kind button, .formula-dialog__symbols button, .formula-dialog footer button { padding: 6px 9px; border: 1px solid #e3ded4; border-radius: 7px; color: #6d675c; background: #fff; font-size: 11px; }
+.formula-dialog__kind button.is-on, .formula-dialog footer button.is-primary { color: #fff; border-color: #5b574f; background: #5b574f; }
+.formula-dialog__field { min-height: 76px; display: grid; align-items: center; margin: 12px 0; padding: 8px; border: 1px solid #e5dfd5; border-radius: 9px; background: #fff; }
+.formula-dialog__field-mount { width: 100%; }
+.formula-dialog__field math-field { width: 100%; min-height: 52px; border: 0; font-size: 22px; }
+.formula-dialog__field p { color: var(--ws-muted); font-size: 11px; }
+.formula-dialog__source { display: grid; gap: 5px; margin: 12px 0; color: var(--ws-muted); font-size: 10px; }
+.formula-dialog__source textarea { min-height: 72px; resize: vertical; padding: 9px; border: 1px solid #e5dfd5; border-radius: 8px; background: #fbfaf7; color: #4a463f; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.formula-dialog footer span { flex: 1; }
+.emoji-dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(29, 27, 24, .24); backdrop-filter: blur(2px); }
+.emoji-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; padding: 14px; border: 1px solid #ddd7cc; border-radius: 14px; background: #fffefa; box-shadow: 0 18px 60px rgba(41, 37, 31, .2); }
+.emoji-dialog header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.emoji-dialog header > div { display: grid; gap: 2px; }
+.emoji-dialog header small { color: var(--ws-muted); font-size: 10px; font-weight: 400; }
+.emoji-dialog header > button { width: 28px; height: 28px; border-radius: 7px; font-size: 17px; }
+.emoji-dialog__picker { min-height: 360px; }
+.emoji-dialog__picker-mount > em-emoji-picker { width: 100%; height: 360px; --border-radius: 9px; --category-icon-size: 17px; }
+.emoji-dialog__picker p { color: var(--ws-muted); font-size: 11px; }
+.emoji-dialog__symbol-tabs { display: flex; gap: 5px; margin: 10px 0 7px; }
+.emoji-dialog__symbol-tabs button { padding: 5px 10px; border-radius: 6px; color: var(--ws-muted); font-size: 10px; }
+.emoji-dialog__symbol-tabs button.is-on { color: #fff; background: #5b574f; }
+.emoji-dialog__symbols { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.emoji-dialog__symbols button { aspect-ratio: 1; display: grid; place-items: center; border: 1px solid #ebe6dc; border-radius: 5px; background: #fff; color: #48443d; font-size: 14px; }
 .note-editor__surface mark[data-color='gold'] { background: rgba(226, 188, 100, .46); }
 .note-editor__surface mark[data-color='rose'] { background: rgba(219, 160, 160, .42); }
 .note-editor__surface mark[data-color='sage'] { background: rgba(158, 194, 167, .44); }

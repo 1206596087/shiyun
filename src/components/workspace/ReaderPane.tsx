@@ -7,7 +7,7 @@ import { describeLocator, readableNoteTitle } from '../../types/annotation'
 const EpubReader = lazy(() => import('./EpubReader').then((module) => ({ default: module.EpubReader })))
 const PdfReader = lazy(() => import('./PdfReader').then((module) => ({ default: module.PdfReader })))
 import { IconBook, IconHighlight, IconNote } from './icons'
-import { researchSearchUrl, translationUrl } from '../../data/selectionActions'
+import { adaptReaderSelection, executeSelectionAction, type SharedSelectionAction } from '../../data/selectionService'
 
 export interface ReaderFocus {
   page?: number
@@ -47,6 +47,17 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
   const [active, setActive] = useState<{ highlight: Highlight; notes: Note[] } | null>(null)
   const [focus, setFocus] = useState<{ page?: number; cfi?: string; token: number } | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!selection && !active) return
+    const close = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setSelection(null)
+      setActive(null)
+    }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [active, selection])
 
   const refreshHighlights = useCallback(async () => {
     const items = await annotations.listForBook(bookId)
@@ -177,10 +188,17 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
     [annotations, bookId, refreshHighlights, selection],
   )
 
-  const openResearch = useCallback((url: string) => {
-    window.dispatchEvent(new CustomEvent('shiyun-research-open', { detail: { url, newTab: true } }))
-    setSelection(null)
-  }, [])
+  const runSharedSelectionAction = useCallback((action: SharedSelectionAction) => {
+    if (!selection || !source) return
+    const adapted = adaptReaderSelection(bookId, source.format, selection)
+    void executeSelectionAction(action, adapted, {
+      copyText: (text) => navigator.clipboard.writeText(text),
+      openResearch: (request) => {
+        window.dispatchEvent(new CustomEvent('shiyun-research-open', { detail: request }))
+        setSelection(null)
+      },
+    })
+  }, [bookId, selection, source])
 
   const saveColoredHighlight = useCallback((color: string) => {
     void commitSelection(color).catch((reason: unknown) => {
@@ -312,9 +330,9 @@ export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, o
           <button onClick={handleNoteFromSelection} disabled={busy} title="保存划线并新建一篇关联笔记">
             <IconNote size={14} />写笔记
           </button>
-          <button onClick={() => void navigator.clipboard.writeText(selection.quote)} title="复制选中文字">复制</button>
-          <button onClick={() => openResearch(translationUrl(selection.quote))} title="联网翻译所选文字">翻译</button>
-          <button onClick={() => openResearch(researchSearchUrl(selection.quote))} title="在网页中搜索所选文字">搜索</button>
+          <button onClick={() => runSharedSelectionAction('copy')} title="复制选中文字">复制</button>
+          <button onClick={() => runSharedSelectionAction('translate')} title="联网翻译所选文字">翻译</button>
+          <button onClick={() => runSharedSelectionAction('search')} title="在网页中搜索所选文字">搜索</button>
           <button className="selection-toolbar__close" onClick={() => setSelection(null)} aria-label="关闭选区工具栏">×</button>
         </div>
       )}

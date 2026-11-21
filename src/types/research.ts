@@ -31,6 +31,27 @@ export interface ResearchTabState {
   canGoForward: boolean
   error: string | null
   zoom: number
+  userAgentMode: ResearchUserAgentMode
+  mobileMode: boolean
+}
+
+export type ResearchUserAgentMode = 'auto' | 'mobile' | 'desktop'
+
+/** 自动模式只在紧凑侧栏使用移动 UA；宽屏布局仍保留桌面网页。 */
+export function resolveResearchMobileMode(mode: ResearchUserAgentMode, compact: boolean): boolean {
+  if (mode === 'mobile') return true
+  if (mode === 'desktop') return false
+  return compact
+}
+
+/** 保留当前 Chromium 版本，只把 Electron 桌面标识变成常见 Android Mobile 标识。 */
+export function toMobileUserAgent(desktopUserAgent: string): string {
+  const withoutElectron = desktopUserAgent
+    .replace(/\([^)]*\)/u, '(Linux; Android 14; Pixel 8)')
+    .replace(/\sElectron\/[^\s]+/u, '')
+  if (/\sMobile\s+Safari\//u.test(withoutElectron)) return withoutElectron
+  if (/\sSafari\//u.test(withoutElectron)) return withoutElectron.replace(/\sSafari\//u, ' Mobile Safari/')
+  return `${withoutElectron} Mobile`
 }
 
 export const EMPTY_RESEARCH_STATE: ResearchState = {

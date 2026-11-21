@@ -132,3 +132,9 @@ M4 已经落地的东西不要重做：划线定位（页码 + 归一化矩形 /
 Windows 接续已加入 PDF 连续阅读实验：`PdfContinuousView` 只渲染当前页 ±1，默认单页模式不得删除；`scripts/e2e/run-pdf-continuous.mjs` 会自行创建隔离书库并只终止自己启动的 Electron 子进程。下一步先做复杂教材、旋转页/混合尺寸压力测试，再考虑把实验标记转为稳定功能。
 
 数据库现已到版本 3，新增多银河三表。`UniverseScene` 只负责低细节总览，进入后仍用 `GalaxyScene`；不要把总览点云变成知识实体，也不要在多个星系间复制笔记。`db/galaxies.ts` 的默认归属与删除回迁语义有仓储测试保护。导入书籍必须继续容忍跨设备遗留的失效文件夹 ID并落到未分类。PDF 连续滚动实验已落地，不要把单页模式删掉，也不要把渲染窗口改成全书无界挂载。
+
+## Windows 当前接续状态（2026-11-21）
+
+当前权威工作目录是 `C:\Users\admin\Desktop\awa\poetry cloud`，Git 分支 `feat/0.2.0`。用户明确要求桌面验证优先启动 `release\win-unpacked\诗云.exe`，不要再让用户执行复杂 PowerShell；源码变更后先 `npm run pack:offline` 更新它。所有自动化仍必须使用独立 `SHIYUN_DATA_DIR`。
+
+网页标签已支持自动/手机/桌面 UA；自动模式只在紧凑栏使用手机 UA，不能改成全站永久强制。公式节点把 LaTeX 存入 TipTap JSON，KaTeX/MathLive/mhchem/Emoji Mart 必须保持动态加载。第三方 Web Component 只能 append 到 React 不渲染子节点的专用 mount 元素，禁止 `replaceChildren()` 破坏 React DOM。

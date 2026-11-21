@@ -3,7 +3,13 @@ import { IconBack, IconExternal, IconForward, IconGlobe, IconRefresh, IconSearch
 import { getResearchBridge } from '../../data/researchBridge'
 import { displayUrl, toNavigableUrl } from '../../data/researchUrl'
 import { translationUrl, type ResearchRequest } from '../../data/selectionActions'
-import { EMPTY_RESEARCH_STATE, type ResearchBounds, type ResearchState } from '../../types/research'
+import {
+  EMPTY_RESEARCH_STATE,
+  resolveResearchMobileMode,
+  type ResearchBounds,
+  type ResearchState,
+  type ResearchUserAgentMode,
+} from '../../types/research'
 
 export type ResearchLayout = 'compact' | 'expanded' | 'immersive'
 
@@ -97,6 +103,22 @@ export function ResearchSidebar({ active, visible, layout, onLayoutChange, reque
   const demo = bridge.mode !== 'desktop'
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId)
   const zoom = activeTab?.zoom ?? 1
+  const compact = layout === 'compact'
+
+  useEffect(() => {
+    if (bridge.mode !== 'desktop' || !activeTab) return
+    const desiredMobile = resolveResearchMobileMode(activeTab.userAgentMode, compact)
+    if (desiredMobile === activeTab.mobileMode) return
+    void bridge.setUserAgentMode(activeTab.userAgentMode, compact).then((next) => next && setState(next))
+  }, [activeTab, bridge, compact])
+
+  const cycleUserAgent = () => {
+    if (!activeTab) return
+    const next: ResearchUserAgentMode = activeTab.userAgentMode === 'auto'
+      ? 'mobile'
+      : activeTab.userAgentMode === 'mobile' ? 'desktop' : 'auto'
+    void bridge.setUserAgentMode(next, compact).then((value) => value && setState(value))
+  }
 
   return (
     <aside className={`research-sidebar is-${layout}`} aria-label="网页研究">
@@ -140,6 +162,18 @@ export function ResearchSidebar({ active, visible, layout, onLayoutChange, reque
         <small>{Math.round(zoom * 100)}%</small>
         <button disabled={demo} onClick={() => void bridge.setZoom(zoom + 0.1)}>＋</button>
         <button disabled={demo} onClick={() => void bridge.setZoom(1)}>重置</button>
+        <button
+          className={activeTab?.mobileMode ? 'is-on' : ''}
+          disabled={demo || !activeTab}
+          onClick={cycleUserAgent}
+          title="自动：紧凑栏使用手机网页，扩展/沉浸使用桌面网页；点击可逐标签覆盖"
+        >
+          {activeTab?.userAgentMode === 'mobile'
+            ? '手机网页'
+            : activeTab?.userAgentMode === 'desktop'
+              ? '桌面网页'
+              : `自动·${activeTab?.mobileMode ? '手机' : '桌面'}`}
+        </button>
       </div>
 
       {(state.error || notice) && <p className="research-error" role="status">{state.error || notice}</p>}

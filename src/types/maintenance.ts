@@ -4,6 +4,7 @@ export interface MaintenanceStatus {
   logDir: string
   schemaVersion: number
   lastBackupAt: string | null
+  integrity: 'ok' | 'error'
 }
 export interface MaintenanceApi {
   exportBundle: () => Promise<string | null>

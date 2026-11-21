@@ -313,3 +313,33 @@ PDF/EPUB 导入改为“验证魔数 → 哈希去重 → `.partial` 临时复�
 **决策**：单页模式继续作为首次使用默认值。用户显式开启实验模式后，全书只创建轻量页面占位，当前页及前后各 1 页才挂载真实 `PdfPageSurface`。页表面卸载时取消 render task 并清空 canvas；既有 Range 文件协议、文本选择、归一化矩形高亮和 `reading_states.page/zoom` 不变。
 
 **代价**：未测量页面先按常见纸张比例估高，首次经过混合尺寸或旋转页面时滚动条会轻微校正；跨页选择不在本增量范围。后续只有在复杂教材压力测试证明需要时才把半径扩到 2，不能无界渲染。未新增依赖。
+
+---
+
+## ADR-023 · 网页 UA 按布局自动适配并允许逐标签覆盖
+
+**背景**：紧凑研究栏里很多桌面网页横向溢出，但 prompt3 明确禁止对全部网站永久强制移动 UA。
+
+**决策**：每个网页标签保存 `auto / mobile / desktop` 三态。`auto` 在紧凑布局使用 Android Chrome UA，在扩展/沉浸布局恢复 Electron 原始桌面 UA；用户可逐标签覆盖。切换通过主进程 `webContents.setUserAgent()` 后重载当前网页，渲染进程仍拿不到 `webContents`，sandbox、contextIsolation、nodeIntegration=false 与权限拒绝策略不变。
+
+**代价**：少数依赖 Client Hints 而非传统 UA 的网站仍可能显示桌面版，此时使用扩展/沉浸布局；不注入页面脚本伪造完整设备环境。
+
+---
+
+## ADR-024 · 公式以 LaTeX 持久化，编辑器与渲染器动态加载
+
+**背景**：笔记需要可编辑的行内/块级数学与化学公式，静态图片不能恢复源数据。手写数学排版与可视化输入质量不足。
+
+**决策**：TipTap 只保存轻量公式节点及 `latex / formulaKind` 属性；显示时动态加载 KaTeX 与 mhchem，进入编辑弹窗时才动态加载 MathLive。旧 TipTap JSON 不受影响。KaTeX 约 4.0 MB、MathLive 约 5.8 MB（npm 未压缩包），都不进入首屏同步依赖图。
+
+**许可证与维护**：KaTeX 0.19.1、MathLive 0.111.4 均为 MIT；2026-10 仍有发布。替代方案是纯文本 LaTeX，但缺少实时预览与可视化键盘。MathLive 内容只作为本地输入，KaTeX 使用 `trust:false`，不开放不可信 HTML 命令。
+
+---
+
+## ADR-025 · Emoji Mart 使用原生 Web Component 并动态加载离线数据
+
+**背景**：prompt3 要求 Emoji 分类、搜索、最近使用和中文界面；`@emoji-mart/react` 的 peer dependency 只声明到 React 18，而本项目使用 React 19。
+
+**决策**：使用 `emoji-mart@5.6.0` 的 `Picker` Web Component，加 `@emoji-mart/data@1.2.1` 的本地 native 数据和中文 i18n；三者只在用户打开面板时动态 import。Emoji 以 Unicode 插入 TipTap，另用轻量本地表补数学、希腊和学术符号。Web Component append 到专用空 mount，不直接修改 React 管理的子节点。
+
+**许可证与代价**：两包均为 MIT。data 未压缩安装体积约 28 MB，但生产输出仅生成约 513 kB 的 native 数据块和约 124 kB 的组件块，首屏不同步加载。最近使用记录由 Emoji Mart 本地存储维护，暂不随 `.shiyunbundle` 迁移。

@@ -63,13 +63,17 @@
     }
   },
   "dependencies": {
-    "@tiptap/core": "^3.35.0",
+    "@emoji-mart/data": "^1.2.1",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@react-three/postprocessing": "^3.2.2",
+    "@tiptap/core": "^3.35.0",
     "@tiptap/react": "^3.35.0",
     "@tiptap/starter-kit": "^3.35.0",
+    "emoji-mart": "^5.6.0",
     "epubjs": "^0.3.93",
+    "katex": "^0.19.1",
+    "mathlive": "^0.111.4",
     "pdfjs-dist": "^5.7.284",
     "postprocessing": "^6.39.6",
     "react": "^19.3.1",

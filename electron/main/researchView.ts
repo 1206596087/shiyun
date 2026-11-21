@@ -1,6 +1,6 @@
 import { BrowserWindow, WebContentsView, session } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { ResearchState, ResearchTabState } from '../../src/types/research.ts'
+import { resolveResearchMobileMode, toMobileUserAgent, type ResearchState, type ResearchTabState, type ResearchUserAgentMode } from '../../src/types/research.ts'
 
 export interface ResearchBounds { x: number; y: number; width: number; height: number }
 
@@ -8,7 +8,15 @@ const PARTITION = 'persist:research'
 const MIN_SIZE = 40
 const MAX_TABS = 12
 
-interface ResearchTab { id: string; view: WebContentsView; error: string | null; zoom: number }
+interface ResearchTab {
+  id: string
+  view: WebContentsView
+  error: string | null
+  zoom: number
+  userAgentMode: ResearchUserAgentMode
+  mobileMode: boolean
+  desktopUserAgent: string
+}
 
 let host: BrowserWindow | null = null
 let tabs: ResearchTab[] = []
@@ -44,7 +52,7 @@ function toState(tab: ResearchTab): ResearchTabState {
     loading: contents.isLoading(),
     canGoBack: contents.navigationHistory.canGoBack(),
     canGoForward: contents.navigationHistory.canGoForward(),
-    error: tab.error, zoom: tab.zoom,
+    error: tab.error, zoom: tab.zoom, userAgentMode: tab.userAgentMode, mobileMode: tab.mobileMode,
   }
 }
 
@@ -105,7 +113,15 @@ function makeTab(): ResearchTab {
   } })
   secureSession()
   host.contentView.addChildView(view)
-  const tab: ResearchTab = { id: `research-${randomUUID()}`, view, error: null, zoom: 1 }
+  const tab: ResearchTab = {
+    id: `research-${randomUUID()}`,
+    view,
+    error: null,
+    zoom: 1,
+    userAgentMode: 'auto',
+    mobileMode: false,
+    desktopUserAgent: view.webContents.getUserAgent(),
+  }
   tabs.push(tab); activeTabId = tab.id; wireTab(tab); syncBounds()
   return tab
 }
@@ -159,6 +175,19 @@ export function setResearchZoom(value: number): ResearchState {
   const tab = activeTab(); if (!tab) return researchState()
   tab.zoom = Math.max(0.5, Math.min(2, Math.round(value * 10) / 10))
   tab.view.webContents.setZoomFactor(tab.zoom); pushState(); return researchState()
+}
+
+export function setResearchUserAgentMode(mode: ResearchUserAgentMode, compact: boolean): ResearchState {
+  const tab = activeTab()
+  if (!tab) return researchState()
+  const mobile = resolveResearchMobileMode(mode, compact)
+  const changed = tab.mobileMode !== mobile
+  tab.userAgentMode = mode
+  tab.mobileMode = mobile
+  tab.view.webContents.setUserAgent(mobile ? toMobileUserAgent(tab.desktopUserAgent) : tab.desktopUserAgent)
+  if (changed && isHttpUrl(tab.view.webContents.getURL())) tab.view.webContents.reload()
+  pushState()
+  return researchState()
 }
 
 export async function selectedResearchText(): Promise<{ text: string; title: string; url: string } | null> {

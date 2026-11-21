@@ -37,6 +37,14 @@ import {
 let db: DatabaseSync | null = null
 let paths: DataPaths | null = null
 
+function assertDatabaseIntegrity(connection: DatabaseSync): void {
+  const rows = connection.prepare('PRAGMA integrity_check').all() as { integrity_check?: unknown }[]
+  const messages = rows.map((row) => String(row.integrity_check ?? '')).filter(Boolean)
+  if (messages.length !== 1 || messages[0] !== 'ok') {
+    throw new Error(`数据库完整性检查失败：${messages.join('；') || '没有返回结果'}。请从设置页备份目录恢复，勿继续写入当前数据库。`)
+  }
+}
+
 /**
  * 打开书库：建目录 → 打开连接 → （有旧库时先备份）→ 迁移 → 24 小时自动备份。
  *
@@ -54,6 +62,7 @@ export function initLibrary(): void {
     createBackup(connection, resolved.dbFile, resolved.backupsDir)
   }
   runMigrations(connection)
+  assertDatabaseIntegrity(connection)
   if (shouldAutoBackup(resolved.backupsDir)) {
     createBackup(connection, resolved.dbFile, resolved.backupsDir)
   }

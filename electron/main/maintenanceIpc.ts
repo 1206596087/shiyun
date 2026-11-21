@@ -30,7 +30,14 @@ export function registerMaintenanceIpc(trust: (url: string) => void) {
     trust(event.senderFrame?.url ?? '')
     const { db, paths } = requireLibrary()
     const newest = listBackups(paths.backupsDir)[0]
-    return { dataDir: paths.root, logDir: join(paths.root, 'logs'), schemaVersion: currentVersion(db), lastBackupAt: newest ? new Date(newest.mtimeMs).toISOString() : null }
+    const check = db.prepare('PRAGMA quick_check').get() as { quick_check?: unknown } | undefined
+    return {
+      dataDir: paths.root,
+      logDir: join(paths.root, 'logs'),
+      schemaVersion: currentVersion(db),
+      lastBackupAt: newest ? new Date(newest.mtimeMs).toISOString() : null,
+      integrity: check?.quick_check === 'ok' ? 'ok' : 'error',
+    }
   })
   ipcMain.handle('maintenance:trash', (event): TrashItem[] => {
     trust(event.senderFrame?.url ?? '')

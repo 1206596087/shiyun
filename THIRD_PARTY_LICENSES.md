@@ -19,6 +19,9 @@
 | @tiptap/core 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记选区彩色标记扩展 | MIT | 再分发时保留 MIT 版权与许可文本 |
 | @tiptap/react 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记富文本编辑器（React 绑定） | MIT | 依赖 `@tiptap/core`、`@tiptap/pm` 等，全部 MIT |
 | @tiptap/starter-kit 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记编辑器的基础扩展集（段落、粗斜体、列表、引用、历史） | MIT | 同上 |
+| KaTeX 0.19.1 | https://github.com/KaTeX/KaTeX | 动态加载的数学/物理公式与 mhchem 化学方程式渲染 | MIT | 再分发时保留 MIT 版权与许可文本；字体与 CSS 仅在公式出现时加载 |
+| MathLive 0.111.4 | https://github.com/arnog/mathlive | 动态加载的 LaTeX 可视化编辑器与虚拟键盘 | MIT | 再分发时保留 MIT 版权与许可文本；只在打开公式编辑弹窗时加载 |
+| Emoji Mart 5.6.0 / data 1.2.1 | https://github.com/missive/emoji-mart | 动态加载的离线 Emoji 选择器、中文界面、检索与最近使用 | MIT | 再分发时保留 MIT 版权与许可文本；只在打开 Emoji 面板时加载 |
 
 ## 构建与开发依赖（不随应用代码分发，但会进入开发/构建环境）
 

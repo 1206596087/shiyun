@@ -203,6 +203,14 @@ export function plainTextFromTiptap(raw: string): string {
     if (typeof node !== 'object' || node === null) return
     const record = node as Record<string, unknown>
     if (typeof record.text === 'string') chunks.push(record.text)
+    if (record.type === 'formulaInline' || record.type === 'formulaBlock') {
+      const attrs = record.attrs
+      if (typeof attrs === 'object' && attrs !== null) {
+        const latex = (attrs as Record<string, unknown>).latex
+        if (typeof latex === 'string' && latex.trim()) chunks.push(latex.trim())
+      }
+      if (record.type === 'formulaBlock') chunks.push('\n')
+    }
     if (Array.isArray(record.content)) {
       for (const child of record.content) walk(child)
       if (record.type === 'paragraph' || record.type === 'heading') chunks.push('\n')
