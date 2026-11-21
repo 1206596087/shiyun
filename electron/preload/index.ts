@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { ImportReport, LibraryNodeKind, LibraryTree } from '../../src/types/library.ts'
 import type { BookSource, ReadingState, SaveReadingStatePayload } from '../../src/types/reader.ts'
+import type {
+  CreateHighlightInput,
+  CreateNoteInput,
+  Highlight,
+  Note,
+  UpdateNoteInput,
+} from '../../src/types/annotation.ts'
 
 export interface LibraryMeta {
   dataDir: string
@@ -37,10 +44,28 @@ export interface ShiyunLibraryApi {
   setPageCount: (bookId: string, pageCount: number) => Promise<ReadingState>
 }
 
+/** 划线与笔记：一条划线可挂多篇笔记，一篇笔记也可引多条划线（多对多）。 */
+export interface ShiyunAnnotationApi {
+  listForBook: (bookId: string) => Promise<Highlight[]>
+  listAllHighlights: () => Promise<Highlight[]>
+  createHighlight: (input: CreateHighlightInput) => Promise<Highlight>
+  deleteHighlight: (highlightId: string) => Promise<void>
+  notesForHighlight: (highlightId: string) => Promise<Note[]>
+  highlightsForNote: (noteId: string) => Promise<Highlight[]>
+  listNotes: () => Promise<Note[]>
+  getNote: (noteId: string) => Promise<Note | null>
+  createNote: (input: CreateNoteInput) => Promise<Note>
+  updateNote: (noteId: string, patch: UpdateNoteInput) => Promise<Note>
+  deleteNote: (noteId: string) => Promise<void>
+  link: (highlightId: string, noteId: string) => Promise<void>
+  unlink: (highlightId: string, noteId: string) => Promise<void>
+}
+
 export interface ShiyunDesktopApi {
   getRuntimeInfo: () => Promise<{ platform: string; version: string; electron: string }>
   openExternal: (url: string) => Promise<void>
   library: ShiyunLibraryApi
+  annotations: ShiyunAnnotationApi
 }
 
 const library: ShiyunLibraryApi = {
@@ -60,10 +85,27 @@ const library: ShiyunLibraryApi = {
   setPageCount: (bookId, pageCount) => ipcRenderer.invoke('reading:setPageCount', { bookId, pageCount }),
 }
 
+const annotations: ShiyunAnnotationApi = {
+  listForBook: (bookId) => ipcRenderer.invoke('annotation:listForBook', { bookId }),
+  listAllHighlights: () => ipcRenderer.invoke('annotation:listAllHighlights'),
+  createHighlight: (input) => ipcRenderer.invoke('annotation:createHighlight', input),
+  deleteHighlight: (highlightId) => ipcRenderer.invoke('annotation:deleteHighlight', { highlightId }),
+  notesForHighlight: (highlightId) => ipcRenderer.invoke('annotation:notesForHighlight', { highlightId }),
+  highlightsForNote: (noteId) => ipcRenderer.invoke('annotation:highlightsForNote', { noteId }),
+  listNotes: () => ipcRenderer.invoke('annotation:listNotes'),
+  getNote: (noteId) => ipcRenderer.invoke('annotation:getNote', { noteId }),
+  createNote: (input) => ipcRenderer.invoke('annotation:createNote', input),
+  updateNote: (noteId, patch) => ipcRenderer.invoke('annotation:updateNote', { noteId, patch }),
+  deleteNote: (noteId) => ipcRenderer.invoke('annotation:deleteNote', { noteId }),
+  link: (highlightId, noteId) => ipcRenderer.invoke('annotation:link', { highlightId, noteId }),
+  unlink: (highlightId, noteId) => ipcRenderer.invoke('annotation:unlink', { highlightId, noteId }),
+}
+
 const desktopApi: ShiyunDesktopApi = {
   getRuntimeInfo: () => ipcRenderer.invoke('app:get-runtime-info'),
   openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
   library,
+  annotations,
 }
 
 contextBridge.exposeInMainWorld('shiyunDesktop', desktopApi)

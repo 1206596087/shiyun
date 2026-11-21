@@ -1,18 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LibraryBridge } from '../../data/libraryBridge'
+import type { AnnotationBridge } from '../../data/annotationBridge'
 import type { BookSource, SaveReadingStatePayload } from '../../types/reader'
+import type { Highlight, Note, TextSelectionAnchor } from '../../types/annotation'
+import { describeLocator, readableNoteTitle } from '../../types/annotation'
 import { EpubReader } from './EpubReader'
 import { PdfReader } from './PdfReader'
-import { IconBook } from './icons'
+import { IconBook, IconHighlight, IconNote } from './icons'
+
+export interface ReaderFocus {
+  page?: number
+  cfi?: string
+  token: number
+}
 
 interface Props {
   bookId: string
   title: string
   bridge: LibraryBridge
+  annotations: AnnotationBridge
+  /** 外部（划线列表 / 笔记列表）要求定位到某一页或某个 CFI */
+  focusRequest?: ReaderFocus | null
+  /** 打开（或新建后打开）某篇笔记的标签页 */
+  onOpenNote: (noteId: string) => void
 }
 
-/** 真实书籍的阅读页：取源文件 → 按格式挂 PDF.js / EPUB.js → 去抖保存阅读进度。 */
-export function ReaderPane({ bookId, title, bridge }: Props) {
+/** 真实书籍的阅读页：取源文件 → 挂 PDF.js / EPUB.js → 划线、笔记、进度。 */
+export function ReaderPane({ bookId, title, bridge, annotations, focusRequest, onOpenNote }: Props) {
   // 载入状态按 bookId 派生：换了书旧结果立即失效，effect 里不必同步重置。
   const [loaded, setLoaded] = useState<{ bookId: string; source: BookSource | null; error: string | null }>({
     bookId: '',
@@ -23,6 +37,18 @@ export function ReaderPane({ bookId, title, bridge }: Props) {
   const error = loaded.bookId === bookId ? loaded.error : null
   const loading = loaded.bookId !== bookId
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [highlights, setHighlights] = useState<{ bookId: string; items: Highlight[] }>({ bookId: '', items: [] })
+  const bookHighlights = highlights.bookId === bookId ? highlights.items : []
+  const [selection, setSelection] = useState<TextSelectionAnchor | null>(null)
+  const [active, setActive] = useState<{ highlight: Highlight; notes: Note[] } | null>(null)
+  const [focus, setFocus] = useState<{ page?: number; cfi?: string; token: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const refreshHighlights = useCallback(async () => {
+    const items = await annotations.listForBook(bookId)
+    setHighlights({ bookId, items })
+  }, [annotations, bookId])
 
   useEffect(() => {
     let cancelled = false
@@ -40,6 +66,19 @@ export function ReaderPane({ bookId, title, bridge }: Props) {
       cancelled = true
     }
   }, [bookId, bridge])
+
+  useEffect(() => {
+    let cancelled = false
+    annotations.listForBook(bookId).then(
+      (items) => {
+        if (!cancelled) setHighlights({ bookId, items })
+      },
+      () => undefined,
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [annotations, bookId])
 
   // 卸载前把最后一次进度落盘，避免快速切标签丢进度
   const pendingRef = useRef<SaveReadingStatePayload | null>(null)
@@ -90,6 +129,107 @@ export function ReaderPane({ bookId, title, bridge }: Props) {
     [schedule],
   )
 
+  const handleSelect = useCallback((next: TextSelectionAnchor) => {
+    setActive(null)
+    setSelection(next)
+  }, [])
+
+  const handleHighlightClick = useCallback(
+    (highlight: Highlight) => {
+      setSelection(null)
+      annotations.notesForHighlight(highlight.id).then(
+        (notes) => setActive({ highlight, notes }),
+        () => setActive({ highlight, notes: [] }),
+      )
+    },
+    [annotations],
+  )
+
+  /** 把当前选区变成一条划线；返回新划线，供「写笔记」继续挂上去。 */
+  const commitSelection = useCallback(
+    async (color?: string): Promise<Highlight | null> => {
+      if (!selection) return null
+      setBusy(true)
+      try {
+        const highlight = await annotations.createHighlight({
+          bookId,
+          locatorType: selection.cfi ? 'epub_cfi' : 'pdf_page',
+          page: selection.page,
+          cfi: selection.cfi,
+          quote: selection.quote,
+          prefix: selection.prefix,
+          suffix: selection.suffix,
+          rects: selection.rects,
+          color,
+        })
+        setSelection(null)
+        window.getSelection()?.removeAllRanges()
+        await refreshHighlights()
+        return highlight
+      } finally {
+        setBusy(false)
+      }
+    },
+    [annotations, bookId, refreshHighlights, selection],
+  )
+
+  const handleHighlightOnly = useCallback(() => {
+    void commitSelection().catch((reason: unknown) => {
+      setLoaded((current) => ({
+        ...current,
+        error: reason instanceof Error ? reason.message : '保存划线失败',
+      }))
+    })
+  }, [commitSelection])
+
+  const handleNoteFromSelection = useCallback(() => {
+    const quote = selection?.quote ?? ''
+    void commitSelection()
+      .then(async (highlight) => {
+        if (!highlight) return
+        const note = await annotations.createNote({ bodyText: '', highlightId: highlight.id })
+        onOpenNote(note.id)
+        void quote
+      })
+      .catch(() => undefined)
+  }, [annotations, commitSelection, onOpenNote, selection])
+
+  const handleNoteFromHighlight = useCallback(
+    (highlight: Highlight) => {
+      void annotations.createNote({ bodyText: '', highlightId: highlight.id }).then((note) => {
+        setActive(null)
+        onOpenNote(note.id)
+      })
+    },
+    [annotations, onOpenNote],
+  )
+
+  const handleDeleteHighlight = useCallback(
+    (highlight: Highlight) => {
+      void annotations.deleteHighlight(highlight.id).then(() => {
+        setActive(null)
+        void refreshHighlights()
+      })
+    },
+    [annotations, refreshHighlights],
+  )
+
+  const openHighlightSource = useCallback((highlight: Highlight) => {
+    if (highlight.locatorType === 'pdf_page' && highlight.page) {
+      setFocus({ page: highlight.page, token: Date.now() })
+    } else if (highlight.cfi) {
+      setFocus({ cfi: highlight.cfi, token: Date.now() })
+    }
+  }, [])
+
+  // 外部定位请求与内部「定位到这里」用同一套 token 比较，取更晚的那个。
+  // 纯派生，不在 effect 里 setState，避免多渲染一轮。
+  const activeFocus: ReaderFocus | null = (() => {
+    if (!focusRequest) return focus
+    if (!focus) return focusRequest
+    return focusRequest.token >= focus.token ? focusRequest : focus
+  })()
+
   if (loading) {
     return <p className="book-reader__status book-reader__status--page">正在打开《{title}》…</p>
   }
@@ -118,25 +258,87 @@ export function ReaderPane({ bookId, title, bridge }: Props) {
     )
   }
 
-  if (source.format === 'pdf') {
-    return (
+  const reader =
+    source.format === 'pdf' ? (
       <PdfReader
         url={source.url}
         initialPage={source.state.page}
         initialZoom={source.state.zoom}
+        focus={activeFocus?.page ? { page: activeFocus.page, token: activeFocus.token } : null}
+        highlights={bookHighlights}
         onProgress={handlePdfProgress}
         onPageCount={handlePageCount}
+        onSelect={handleSelect}
+        onHighlightClick={handleHighlightClick}
+      />
+    ) : (
+      <EpubReader
+        url={source.url}
+        initialCfi={source.state.cfi}
+        initialZoom={source.state.zoom}
+        focus={activeFocus?.cfi ? { cfi: activeFocus.cfi, token: activeFocus.token } : null}
+        highlights={bookHighlights}
+        onProgress={handleEpubProgress}
+        onSelect={handleSelect}
+        onHighlightClick={handleHighlightClick}
       />
     )
-  }
 
   return (
-    <EpubReader
-      url={source.url}
-      initialCfi={source.state.cfi}
-      initialZoom={source.state.zoom}
-      onProgress={handleEpubProgress}
-    />
+    <>
+      {reader}
+      {selection && (
+        <div
+          className="selection-toolbar"
+          style={{ left: Math.max(12, selection.anchor.x), top: Math.max(12, selection.anchor.y - 46) }}
+          role="toolbar"
+          aria-label="选中文字工具栏"
+        >
+          <button onClick={handleHighlightOnly} disabled={busy} title="把选中的文字存成划线">
+            <IconHighlight size={14} />添加划线
+          </button>
+          <span aria-hidden="true">/</span>
+          <button onClick={handleNoteFromSelection} disabled={busy} title="保存划线并新建一篇关联笔记">
+            <IconNote size={14} />写笔记
+          </button>
+        </div>
+      )}
+      {active && (
+        <div className="highlight-popover" role="dialog" aria-label="划线详情">
+          <p className="highlight-popover__quote">“{active.highlight.quote.slice(0, 80)}”</p>
+          <p className="highlight-popover__meta">
+            {describeLocator(active.highlight)} · {active.highlight.noteCount} 篇笔记
+          </p>
+          {active.notes.length > 0 ? (
+            <ul className="highlight-popover__notes">
+              {active.notes.map((note) => (
+                <li key={note.id}>
+                  <button onClick={() => { setActive(null); onOpenNote(note.id) }}>
+                    <IconNote size={13} />{readableNoteTitle(note.title, note.bodyText)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="highlight-popover__empty">这条划线还没有笔记。</p>
+          )}
+          <div className="highlight-popover__actions">
+            <button onClick={() => handleNoteFromHighlight(active.highlight)}>
+              <IconNote size={13} />写笔记
+            </button>
+            <button onClick={() => openHighlightSource(active.highlight)}>
+              <IconBook size={13} />定位到这里
+            </button>
+            <button className="is-danger" onClick={() => handleDeleteHighlight(active.highlight)}>
+              删除划线
+            </button>
+            <button className="highlight-popover__close" onClick={() => setActive(null)} aria-label="关闭">
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

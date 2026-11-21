@@ -43,7 +43,7 @@ M2 之后，**书库是数据的权威副本**，`localStorage` 只留纯 UI 偏
 
 | 状态 | 位置 | 持久化 |
 | --- | --- | --- |
-| 书库（文件夹 / 书籍 / 划线 / 笔记 / 关系 / 坐标） | 主进程 `libraryService` + `node:sqlite` | `%APPDATA%\shiyun\shiyun.db` |
+| 书库（文件夹 / 书籍 / 划线 / 笔记 / 关系 / 阅读状态 / 坐标） | 主进程 `libraryService` + `node:sqlite` | `%APPDATA%\shiyun\shiyun.db` |
 | 知识图谱投影 `KnowledgeGraphData` | `App.tsx` → `useState`（M5 改为从 SQLite 生成） | 暂时仍是 `localStorage: shiyun-prototype-knowledge-v1`（迁移后该键改名为 `.migrated` 保留） |
 | 银河视觉参数 `GalaxyConfig` | `App.tsx` | `localStorage: shiyun-view-config` |
 | 视图模式 / 选中 / 相机聚焦 | `App.tsx`（瞬时） | 不持久化 |
@@ -104,18 +104,40 @@ ReadingDesk → ReaderPane  window.shiyunDesktop.library   libraryIpc.ts（校�
 - 阅读状态一个表两种定位：PDF 存 `page`，EPUB 存 `cfi`，`zoom` 共用；数据库层 `CHECK` 保证至少有一个定位存在（见 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)）。
 - `pdfjs-dist` 的 `cmaps` 与 `standard_fonts` 由 `scripts/copy-pdfjs-assets.mjs` 复制到 `public/pdfjs/`（`predev` / `prebuild` 自动执行），否则中文 PDF 的字形会退化成方块。
 
+## 3.3 划线笔记数据流（M4）
+
+```text
+渲染进程                                preload                     主进程
+ReaderPane ── 选区(quote/prefix/suffix/rects + page|cfi) ──┐
+   │  onSelect 后浮出 .selection-toolbar                   │
+   ├─ createHighlight ── annotationBridge ── ipcRenderer ──> annotationIpc.ts（校验）
+   │                                                          └ annotations.createHighlight → highlights
+   ├─ listForBook(bookId) ←── 返回实体列表 ←──────────────────  listHighlights（含 note_count 子查询）
+   ├─ createNote({highlightId}) ──> notes + highlight_notes（复合主键，INSERT OR IGNORE 幂等）
+   └─ updateNote（去抖 600ms） ──> notes.body(JSON) + notes.body_text(纯文本)
+```
+
+要点：
+
+- **定位不用像素**：PDF 存 `page` + `rect_json`（相对页面宽高的 0–1 矩形）+ `quote/prefix/suffix`；EPUB 存 `cfi` + `quote/prefix/suffix`。复原顺序是「先按页/CFI 找到位置，再用归一化矩形画框」，所以缩放与窗口宽度变化都不会让划线漂移。
+- **两种文本层都不是现成的**：pdfjs 的 `TextLayer.render()` 在 Electron 45 里会挂住不返回，因此 PDF 走 `pdfTextLayer.ts` 自己排 span（`multiplyTransform` / `layoutTextSpans` / `horizontalScale`，有单测）；EPUB 的 `book.getRange(cfi)` 返回的 Range 属于旧 document、`getClientRects()` 恒为空（这也是 EPUB.js 自带标注层画不出持久划线的原因），因此用 `new EpubCFI(cfi).toRange(当前 iframe 文档)` 自算几何，两者最后都渲染成同一套 `.book-reader__mark` 按钮。
+- **多对多只在一处表达**：`highlight_notes(highlight_id, note_id)` 复合主键，关联与解除都幂等；删除划线只删关联与划线本身，笔记永远不动；删除笔记是软删并清关联。双向查看由 `notesForHighlight` / `highlightsForNote` 两个方向提供。
+- **两个渲染陷阱**（都在 M4 踩过并写进 CSS 注释）：划线的金色底必须用 `.book-reader__highlights .book-reader__mark` 这种更具体的选择器，否则被 `.workspace-space button { background: transparent }` 覆盖；同一 canvas 上的并发 `render()` 必须先 `await previous.promise`，否则 pdf.js 会静默拒绝新任务。
+
 ## 4. 书房结构
 
 ```text
-KnowledgeWorkspace          # 三栏布局 + 拖拽 + UI 状态持久化 + 书库加载/写操作
+KnowledgeWorkspace          # 三栏布局 + 拖拽 + UI 状态持久化 + 书库加载/写操作 + 注释桥
 ├─ WorkspaceHeader          # 品牌、全局搜索（读 graph）、布局设置、返回银河
-├─ FileSidebar              # 真实文件夹树（新建/重命名/拖拽/删除）+ 计数 + 入口
-├─ ReadingDesk              # 标签栏 + 页面容器（demo book / reader / note / empty）
+├─ FileSidebar              # 真实文件夹树（新建/重命名/拖拽/删除）+ 计数 + 我的划线/我的笔记入口
+├─ ReadingDesk              # 标签栏 + 按 kind 分派页面
 │   ├─ BookPage             # 内置演示书的排版样例（演示数据，不是真实书页）
-│   ├─ ReaderPane           # 真实书籍：取源、进度回写、错误与缺失提示
-│   │   ├─ PdfReader        # PDF.js：适合宽度单页 canvas + 页码 + 缩放 + 目录
-│   │   └─ EpubReader       # EPUB.js：分页渲染 + CFI + 目录 + 字号 + 方向键
-│   └─ NotePage             # 标题 + 只读正文（M4 换 TipTap）
+│   ├─ ReaderPane           # 真实书籍：取源、进度回写、划线/选区/浮层、错误与缺失提示
+│   │   ├─ PdfReader        # PDF.js：canvas + 自排文本层 + 页码 + 缩放 + 目录 + 划线叠加
+│   │   └─ EpubReader       # EPUB.js：分页 + CFI + 目录 + 字号 + CFI 划线叠加
+│   ├─ NoteEditor           # TipTap 正文（自动保存）+ 标题 + 关联划线（可跳原文/解除/新增）
+│   ├─ HighlightListPage    # “我的划线”：全部划线 + 定位原文 + 写笔记
+│   └─ NoteListPage         # “我的笔记”：按更新时间 + 关联划线数 + 跳原文
 └─ ResearchSidebar          # 研究提示卡 + 外部浏览器打开（M6 换 WebContentsView）
 ```
 

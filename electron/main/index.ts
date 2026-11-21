@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { registerAnnotationIpc } from './annotationIpc.ts'
 import { registerLibraryIpc } from './libraryIpc.ts'
 import { closeLibrary, initLibrary, resolveBookFile } from './libraryService.ts'
 
@@ -28,10 +29,10 @@ function installContentSecurityPolicy() {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           // `shiyun-book:` 是本地书籍协议（PDF.js 取文件、EPUB.js 取资源都要用到）；
-          // `blob:`/`data:` 给 EPUB 的 iframe 与图片。Google Fonts 是既有例外（ADR-009）。
+          // `blob:`/`data:` 给 EPUB 的 iframe 与图片。界面字体只用系统字体，不再放行 Google Fonts。
           "default-src 'self'; script-src 'self'; " +
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-            "font-src 'self' data: blob: https://fonts.gstatic.com shiyun-book:; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "font-src 'self' data: blob: shiyun-book:; " +
             "img-src 'self' data: blob: shiyun-book:; connect-src 'self' blob: data: shiyun-book:; " +
             "frame-src 'self' blob: data: shiyun-book:; child-src 'self' blob: data: shiyun-book:; " +
             // EPUB.js 会在没有脚本权限的 srcdoc iframe 里写 <base>（源文件所在目录），
@@ -108,6 +109,7 @@ function assertTrustedSender(url: string) {
 
 function registerIpc() {
   registerLibraryIpc(assertTrustedSender)
+  registerAnnotationIpc(assertTrustedSender)
 
   ipcMain.handle('app:get-runtime-info', (event) => {
     assertTrustedSender(event.senderFrame?.url ?? '')

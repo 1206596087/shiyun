@@ -1,4 +1,4 @@
-export type WorkspaceTabKind = 'book' | 'note'
+export type WorkspaceTabKind = 'book' | 'note' | 'highlights' | 'notes'
 
 export interface WorkspaceTab {
   id: string

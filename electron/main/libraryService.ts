@@ -58,7 +58,7 @@ export function closeLibrary(): void {
   paths = null
 }
 
-function requireLibrary(): { db: DatabaseSync; paths: DataPaths } {
+export function requireLibrary(): { db: DatabaseSync; paths: DataPaths } {
   if (!db || !paths) throw new Error('书库尚未初始化')
   return { db, paths }
 }

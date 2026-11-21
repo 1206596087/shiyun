@@ -4,6 +4,41 @@
 
 ---
 
+## ADR-015 · 划线用自绘叠加层，不依赖阅读引擎自带的标注层
+
+**背景**：M4 要把划线画回书页，并支持点开查看与跳转。EPUB.js 自带 `rendition.annotations.highlight()`，pdfjs 自带 `TextLayer` + 文本高亮思路，看似应该直接用。
+
+**决策**：两边都不用引擎自带的标注层。
+- PDF：`pdfjs-dist` 的 `TextLayer.render()` 在 Electron 45 里 `await` 永不返回（也不抛错），因此用 `src/components/workspace/pdfTextLayer.ts` 自己把 `textContent.items` 排成绝对定位的 span（`multiplyTransform` / `layoutTextSpans` / `horizontalScale`，纯函数 + 单测）。
+- EPUB：`rendition.annotations` 在重开书后一条都画不出来（实测 svg 数为 0），根因是 `book.getRange(cfi)` 返回的 Range 属于旧 document，`getClientRects()` 恒为空；改为 `new EpubCFI(cfi).toRange(当前 iframe 的 document)` 自算几何。
+- 两边最后都渲染成同一套 `.book-reader__mark` 按钮（金色/rose/sage），点击走同一个 popover。
+
+**理由**：引擎的标注层在这个 Electron 版本上与「存档后再复原」不兼容，而复原正是这个产品的核心要求；自绘叠加层的坐标来源单一（归一化矩形 / CFI + Range），行为可测、可调试，也不绑死引擎版本。
+
+**代价**：多维护两套几何换算（PDF 的 transform 矩阵、EPUB 的 iframe 坐标偏移），多行选区目前只画第一条矩形的框。
+
+**何时重新评估**：升级 pdfjs / epubjs 大版本时，或需要「跨页划线」「逐行高亮」时——`highlights.rect_json` 已经存了全部矩形，届时只需改渲染层。
+
+---
+
+## ADR-014 · 划线定位 = 页码 + 归一化矩形（PDF）/ CFI（EPUB），两者都带原文与上下文
+
+**背景**：划线必须在缩放、窗口宽度变化、重开应用后仍然落在同一段文字上。需求文档明确禁止「只靠像素坐标」。
+
+**决策**：
+- `highlights` 一行只存一种定位：`locator_type='pdf_page'` 时 `page` 必填、`locator_type='epub_cfi'` 时 `cfi` 必填（数据库 `CHECK` 兜底）。
+- PDF 额外存 `rect_json`：相对页面宽高的 0–1 矩形数组，绘制时乘回当前视口尺寸，所以缩放不漂移。
+- 两者都存 `quote`（原文）、`prefix` / `suffix`（各 40 字上下文，`CONTEXT_WINDOW`），用于未来做「页面改版后的二次对齐」与列表展示。
+- 上下文用 `buildContext(pageText, quote)` 从当前页纯文本里截取；找不到就写空，绝不编造。
+
+**理由**：页码/CFI 是「定位到哪」，矩形/引文是「画在哪、是哪句话」。分开之后，即使将来 PDF 页码错位（换版本），也能靠引文做校正；而只存像素的话，一次缩放就全废。
+
+**代价**：一条划线要写 5–7 个字段，导入与复原路径更啰嗦；EPUB 的 CFI 字符串长且难读（界面上只显示前 24 个字符）。
+
+**何时重新评估**：需要跨书、跨版本锚定时（可加 `text_quote_selector` 一类的模糊匹配层），或引入「整章重排」的阅读模式时。
+
+---
+
 ## ADR-013 · PDF.js 5 + EPUB.js 0.3 作为阅读引擎，PDF 单页画布渲染
 
 **背景**：M3 要在中栏里显示真实书页，需要能解析 PDF 与 EPUB 的引擎，并且必须离线可用、许可证允许分发、在 Electron 渲染进程里能跑。

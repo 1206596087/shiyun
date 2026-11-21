@@ -1,6 +1,6 @@
 # 数据库设计（SQLite）
 
-> **状态：已实现（M2），`reading_states` 自 M3 起被阅读器真实读写。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`，阅读进度见 `reading.ts`（PDF 写 `page`、EPUB 写 `cfi`，`zoom` 共用，去抖 700ms 保存）。已应用迁移禁止修改，结构调整必须新增版本。真实阅读产生的划线要等 M4，在那之前 `highlights` 里的数据来自原型迁移。
+> **状态：已实现（M2），`reading_states` 自 M3 起被阅读器真实读写，`highlights` / `notes` / `highlight_notes` 自 M4 起由划线笔记真实读写。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`，阅读进度见 `reading.ts`（PDF 写 `page`、EPUB 写 `cfi`，`zoom` 共用，去抖 700ms 保存），划线笔记见 `annotations.ts`（划线必带 `quote/prefix/suffix`，`locator_type='pdf_page'` 时 `page` 必填、`locator_type='epub_cfi'` 时 `cfi` 必填，`rect_json` 存归一化 0–1 矩形；笔记正文 JSON 与纯文本双写；关联表复合主键天然幂等）。已应用迁移禁止修改，结构调整必须新增版本。
 
 ## 1. 存储位置与文件
 

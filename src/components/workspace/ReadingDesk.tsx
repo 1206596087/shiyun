@@ -1,20 +1,33 @@
 import type { WorkspaceTab } from '../../types/workspace'
 import type { LibraryBridge } from '../../data/libraryBridge'
-import { ReaderPane } from './ReaderPane'
-import { IconBook, IconHighlight, IconLink, IconList, IconNetwork, IconNote, IconPanel, IconPlus, IconQuote } from './icons'
+import type { AnnotationBridge } from '../../data/annotationBridge'
+import type { Highlight } from '../../types/annotation'
+import { ReaderPane, type ReaderFocus } from './ReaderPane'
+import { NoteEditor } from './NoteEditor'
+import { HighlightListPage, NoteListPage } from './AnnotationLists'
+import { IconBook, IconHighlight, IconNote, IconPanel, IconPlus } from './icons'
 
 interface Props {
   tabs: WorkspaceTab[]
   activeTabId: string | null
-  noteDraft: string
   rightVisible: boolean
   bridge: LibraryBridge
+  annotations: AnnotationBridge
+  bookTitle: (bookId: string) => string
+  focusFor: (bookId: string) => ReaderFocus | null
   onActivate: (id: string) => void
   onClose: (id: string) => void
-  onOpenNote: () => void
-  onNoteDraft: (value: string) => void
+  onNewNote: () => void
+  onNewNoteForHighlight: (highlightId: string) => void
+  onOpenNote: (noteId: string) => void
+  onOpenSource: (highlight: Highlight) => void
+  onFocusHighlight: (highlight: Highlight) => void
+  onTitleChange: (noteId: string, title: string) => void
   onToggleRight: () => void
 }
+
+/** 演示阅读页只属于内置的这本演示书；书库里的真实书籍走 ReaderPane。 */
+const DEMO_BOOK_TAB_ID = 'book-biostatistics'
 
 export function ReadingDesk(props: Props) {
   const activeTab = props.tabs.find((tab) => tab.id === props.activeTabId) ?? null
@@ -36,7 +49,7 @@ export function ReadingDesk(props: Props) {
                   if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); props.onActivate(tab.id) }
                 }}
               >
-                {tab.kind === 'book' ? <IconBook size={14} /> : <IconNote size={14} />}
+                <TabIcon kind={tab.kind} />
                 <span className="reader-tab__title">{tab.title}</span>
                 {tab.dirty && <i className="reader-tab__dot" title="有未保存的编辑" />}
                 <button
@@ -47,7 +60,7 @@ export function ReadingDesk(props: Props) {
                 >×</button>
               </div>
             ))}
-            <button className="reader-tab-add" onClick={props.onOpenNote} title="新建笔记标签页" aria-label="新建笔记标签页">
+            <button className="reader-tab-add" onClick={props.onNewNote} title="新建一篇笔记" aria-label="新建一篇笔记">
               <IconPlus size={15} />
             </button>
           </div>
@@ -64,15 +77,41 @@ export function ReadingDesk(props: Props) {
 
         <div className={`reader-body ${isRealBook ? 'is-reader' : ''}`}>
           {!activeTab ? (
-            <EmptyDesk onOpenNote={props.onOpenNote} />
+            <EmptyDesk onNewNote={props.onNewNote} />
           ) : activeTab.kind === 'book' ? (
             activeTab.id === DEMO_BOOK_TAB_ID ? (
-              <BookPage onOpenNote={props.onOpenNote} />
+              <BookPage onOpenNote={() => props.onOpenNote(DEMO_NOTE_ID)} />
             ) : (
-              <ReaderPane bookId={activeTab.id} title={activeTab.title} bridge={props.bridge} />
+              <ReaderPane
+                bookId={activeTab.id}
+                title={activeTab.title}
+                bridge={props.bridge}
+                annotations={props.annotations}
+                focusRequest={props.focusFor(activeTab.id)}
+                onOpenNote={props.onOpenNote}
+              />
             )
+          ) : activeTab.kind === 'note' ? (
+            <NoteEditor
+              noteId={activeTab.id}
+              annotations={props.annotations}
+              onOpenSource={props.onOpenSource}
+              onTitleChange={(title) => props.onTitleChange(activeTab.id, title)}
+            />
+          ) : activeTab.kind === 'highlights' ? (
+            <HighlightListPage
+              annotations={props.annotations}
+              bookTitle={props.bookTitle}
+              onOpenSource={props.onOpenSource}
+              onCreateNote={props.onNewNoteForHighlight}
+            />
           ) : (
-            <NotePage title={activeTab.title} value={props.noteDraft} onChange={props.onNoteDraft} />
+            <NoteListPage
+              annotations={props.annotations}
+              bookTitle={props.bookTitle}
+              onOpenNote={props.onOpenNote}
+              onFocusHighlight={props.onFocusHighlight}
+            />
           )}
         </div>
       </div>
@@ -80,8 +119,14 @@ export function ReadingDesk(props: Props) {
   )
 }
 
-/** 演示阅读页只属于内置的这本演示书；书库里的真实书籍走 ReaderPane。 */
-const DEMO_BOOK_TAB_ID = 'book-biostatistics'
+/** 演示书里那张卡片挂着的种子笔记（annotationBridge 的 demo 实现里有同一份数据）。 */
+const DEMO_NOTE_ID = 'note-demo-rr'
+
+function TabIcon({ kind }: { kind: WorkspaceTab['kind'] }) {
+  if (kind === 'book') return <IconBook size={14} />
+  if (kind === 'highlights') return <IconHighlight size={14} />
+  return <IconNote size={14} />
+}
 
 function BookPage({ onOpenNote }: { onOpenNote: () => void }) {
   return (
@@ -98,53 +143,33 @@ function BookPage({ onOpenNote }: { onOpenNote: () => void }) {
       </p>
 
       <div className="reader-actions" aria-label="选中文字工具栏">
-        <button disabled title="M4 里程碑：真实选区锚点与高亮持久化"><IconHighlight size={14} />添加划线</button>
+        <button disabled title="这是演示排版，不是真实文件：真实 PDF / EPUB 请在左侧打开书库里的书"><IconHighlight size={14} />添加划线</button>
         <span aria-hidden="true">/</span>
         <button onClick={onOpenNote}><IconNote size={14} />写笔记</button>
-        <span aria-hidden="true">/</span>
-        <button disabled title="M4 里程碑：知识关系"><IconNetwork size={14} />关联节点</button>
       </div>
 
       <aside className="reader-note-card">
         <p className="reader-note-card__label"><IconNote size={14} />我的笔记</p>
         <p className="reader-note-card__title">为什么在罕见结局下，OR 会近似 RR？</p>
         <button className="reader-note-card__link" onClick={onOpenNote}>
-          <IconLink size={13} />已关联到上方划线
+          <IconNote size={13} />打开这篇笔记（示例数据）
         </button>
       </aside>
 
-      <p className="reader-page__foot">演示阅读视图 · M3 接入 PDF.js 与 EPUB.js 后显示真实文件内容与目录</p>
+      <p className="reader-page__foot">
+        演示阅读视图 · 真实书籍走 PDF.js / EPUB.js 渲染，这里的排版只用来展示笔记卡片的样子
+      </p>
     </article>
   )
 }
 
-function NotePage({ title, value, onChange }: { title: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <div className="note-page">
-      <div className="note-page__head">
-        <p className="note-page__kind">独立笔记</p>
-        <h1>{title}</h1>
-        <p className="note-page__meta">草稿自动保存到本地 · M4 替换为 TipTap 富文本编辑器</p>
-      </div>
-      <div className="note-format" aria-label="格式工具栏">
-        <button disabled title="M4：加粗"><b>B</b></button>
-        <button disabled title="M4：斜体"><i>I</i></button>
-        <button disabled title="M4：列表"><IconList size={15} /></button>
-        <button disabled title="M4：引用"><IconQuote size={15} /></button>
-        <button disabled title="M4：超链接"><IconLink size={15} /></button>
-      </div>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} aria-label="笔记正文" spellCheck={false} />
-    </div>
-  )
-}
-
-function EmptyDesk({ onOpenNote }: { onOpenNote: () => void }) {
+function EmptyDesk({ onNewNote }: { onNewNote: () => void }) {
   return (
     <div className="empty-desk">
       <IconBook size={26} />
       <h2>打开一本书或一篇笔记</h2>
-      <p>在左侧双击书籍开始阅读，或从这里新建一篇独立笔记。</p>
-      <button onClick={onOpenNote}><IconPlus size={14} />新建笔记</button>
+      <p>在左侧双击书籍开始阅读；选中一句话就能划线、写笔记。也可以在「我的笔记」里找回之前写下的东西。</p>
+      <button onClick={onNewNote}><IconPlus size={14} />新建笔记</button>
     </div>
   )
 }

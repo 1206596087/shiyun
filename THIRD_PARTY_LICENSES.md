@@ -14,6 +14,8 @@
 | React / React DOM | https://github.com/facebook/react | UI 状态与 DOM 渲染 | MIT | 再分发时保留 MIT 版权与许可文本 |
 | pdfjs-dist 5.7.284 | https://github.com/mozilla/pdf.js | PDF 解析、页面渲染、目录 | Apache-2.0 | 保留 `LICENSE`；随包分发 `cmaps/` 与 `standard_fonts/`（由 `scripts/copy-pdfjs-assets.mjs` 复制到 `public/pdfjs/`） |
 | epubjs 0.3.93 | https://github.com/futurepress/epub.js | EPUB 解析、CFI 定位、分页渲染 | BSD-2-Clause | 保留版权声明与许可条件 |
+| @tiptap/react 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记富文本编辑器（React 绑定） | MIT | 依赖 `@tiptap/core`、`@tiptap/pm` 等，全部 MIT |
+| @tiptap/starter-kit 3.35.0 | https://github.com/ueberdosis/tiptap | 笔记编辑器的基础扩展集（段落、粗斜体、列表、引用、历史） | MIT | 同上 |
 
 ## 构建与开发依赖（不随应用代码分发，但会进入开发/构建环境）
 
@@ -34,7 +36,7 @@
 
 | 项目 | 里程碑 | 用途 | 许可证 | 备注 |
 | --- | --- | --- | --- | --- |
-| @tiptap/react | M4 | 笔记富文本编辑 | MIT | 依赖 `@tiptap/starter-kit` 等，全部 MIT |
+| （暂无） | — | — | — | M4 的 TipTap 已安装并投入使用，见上表 |
 
 > SQLite 驱动最终**没有**引入 `better-sqlite3`：M2 改用 Node/Electron 内置的 `node:sqlite`（随 Electron 的 Node 运行时分发，不受本仓库依赖约束，也无需额外许可证文件）。见 [DECISIONS.md](./DECISIONS.md) ADR-010。
 

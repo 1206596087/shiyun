@@ -17,7 +17,13 @@
 
 ![EPUB 阅读器](docs/screenshots/reader-epub.png)
 
-> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）。
+![PDF 划线](docs/screenshots/highlight-pdf.png)
+
+![笔记编辑器](docs/screenshots/note-editor.png)
+
+![EPUB 划线复原](docs/screenshots/highlight-epub.png)
+
+> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`；第四、五张是同一个数据库里的真实 PDF 与 EPUB 在阅读器里渲染的样子（PDF.js 画布 + 页码/缩放，EPUB.js 分页 + 目录 + 字号）；第六张是选中正文划出的金色划线，第七张是划线带出来的三栏式笔记编辑器（标题可留空，正文自动保存，下方列出关联划线），第八张是关掉 EPUB 再重新打开后，靠 CFI 复原的划线。
 
 ## 当前进度
 
@@ -27,8 +33,8 @@
 | M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架 | 完成（桌面窗口已实机验证） |
 | M2 | SQLite 书库、真实文件夹树、导入 PDF/EPUB | 完成（桌面实机验证） |
 | M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放、阅读进度） | 完成（桌面实机验证） |
-| M4 | 划线、笔记、多对多关联 | 下一步 |
-| M5 | 真实知识库生成星图（GraphDataAdapter） | 未开始 |
+| M4 | 划线、笔记、多对多关联 | 完成（桌面实机验证） |
+| M5 | 真实知识库生成星图（GraphDataAdapter） | 下一步 |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 未开始 |
 | M7 | 打磨、Windows 打包、自动更新 | 未开始 |
 
@@ -87,8 +93,8 @@ npm run build:web   # 纯网页构建
 
 - 与银河公用同一份 `KnowledgeGraphData`：左栏「我的划线 / 我的笔记 / 星云网络」计数、顶部全局搜索都读取真实图谱。
 - 顶部导航：诗云标识、个人知识宇宙、全局搜索（回车或输入即搜，命中后跳回银河并聚焦该节点）、布局设置（重置栏宽、显示/隐藏研究栏）、「返回银河」。
-- 左栏文件树：目录来自真实书库（见下节），支持展开/折叠、选中态、双击打开标签页。
-- 中栏多标签阅读：可关闭标签、空状态、书页视图（章节、段落、米黄高亮块、添加划线 / 写笔记 / 关联节点工具行、笔记卡）、笔记页视图（M4 才可编辑，格式栏禁用并标注）。
+- 左栏文件树：目录来自真实书库（见下节），支持展开/折叠、选中态、双击打开标签页；底部「我的划线 / 我的笔记」是真实列表入口。
+- 中栏多标签阅读：可关闭标签、空状态、书页视图（真实 PDF/EPUB；内置演示书才有排版样例，并明确标注是演示）、笔记页（TipTap 编辑器）、划线列表页、笔记列表页。
 - 右栏网页研究栏：真实可用的「外部浏览器打开」（Electron 下走 `window.shiyunDesktop.openExternal`，浏览器下走 `window.open`，只允许 http/https）；地址输入框在 M6 前禁用并注明原因。
 - 三栏可拖拽（左 196–360px、右 264–440px）、右栏可隐藏，隐藏时中栏自动占满；全部 UI 状态持久化到 `localStorage` 键 `shiyun-workspace-ui-v1`。
 - 深浅两个空间通过 `opacity / transform / visibility` 过渡共存，切到书房时银河暂停渲染。
@@ -102,7 +108,14 @@ npm run build:web   # 纯网页构建
 - 中文 PDF 需要 `cmaps`、部分 PDF 需要 `standard_fonts`：`npm run assets` 会把这两组文件从 `pdfjs-dist` 复制到 `public/pdfjs/`（已挂到 `predev` / `prebuild` 钩子上，`public/pdfjs` 不进版本库）。
 - 书库里有书但没有源文件（原型迁移进来的书目）时，阅读区明确写「只保留了书目记录，源文件需要重新导入」，不排假版面；没有书签的 PDF 其「目录」按钮是禁用态——这是真实状态。
 
-### 本地书库（M2）
+### 划线、笔记与关联（M4）
+
+- 在 PDF / EPUB 正文里选中文字，浮出「添加划线 / 写笔记」工具条：划线落库后再画成页面上可点的色块，点一下打开卡片（原文摘录、定位、关联笔记、写笔记、定位到这里、删除划线）。
+- 定位不靠像素：PDF 存「页码 + 归一化矩形（0–1）+ 原文 + 前后文」，EPUB 存「CFI + 原文 + 前后文」。关掉书再打开、重载应用，划线都按这两种定位复原（见 ADR-014）。
+- 笔记用 TipTap 富文本编辑，正文去抖 600ms 自动保存（`notes.body` 存 JSON、`notes.body_text` 供搜索/列表）；标题可以留空，展示时自动取正文首行。
+- 划线 ↔ 笔记是真正的多对多（`highlight_notes` 复合主键）：一条划线可以挂多篇笔记，一篇笔记可以引用多条划线，笔记页里能加/解除关联，划线卡片里能看到它名下的所有笔记。
+- 删除语义按约定执行：删划线保留笔记，删笔记只解除关联并软删，删书不影响任何笔记。
+- 两处工程细节值得记住：EPUB.js 自带的标注层在本项目里画不出持久划线（它解析出的 Range 属于旧 document，`getClientRects()` 恒为空），所以叠加层自己画，几何用 `new EpubCFI(cfi).toRange(当前 iframe 文档)`（ADR-015）；PDF 的透明文本层也是自己排的坐标（`pdfTextLayer.ts`），因为 pdfjs 的 `TextLayer.render()` 在 Electron 里会挂住不返回。
 
 - 主进程用 Node/Electron 内置 `node:sqlite`（Electron 45 的 Node 24 自带，无需原生模块编译，见 [ADR-010](./DECISIONS.md)）打开 `%APPDATA%\shiyun\shiyun.db`：WAL、`foreign_keys=ON`、每版本一个事务的迁移、迁移前备份、24 小时自动备份保留 14 份。
 - IPC 全部经 `library:*` 通道，主进程校验来源（`file://` 或 dev server）与参数类型；渲染进程只通过 `window.shiyunDesktop.library.*` 访问。
@@ -126,7 +139,8 @@ electron/
 ├─ main/index.ts        # 窗口、IPC、导航与安全策略
 ├─ main/libraryService.ts # 书库生命周期（打开/迁移/备份）与业务操作
 ├─ main/libraryIpc.ts   # library:* 通道注册与参数校验
-├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态
+├─ main/annotationIpc.ts # annotation:* 通道（划线、笔记、关联）
+├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移、阅读状态、划线笔记
 ├─ preload/index.ts     # contextBridge 暴露的最小桌面 API
 scripts/
 └─ copy-pdfjs-assets.mjs # 把 pdfjs 的 cmaps / standard_fonts 复制到 public/pdfjs
@@ -135,23 +149,24 @@ src/
 │  ├─ galaxy/           # 银河装饰层：粒子、星核、背景、相机
 │  ├─ knowledge/        # 知识层：节点与关系渲染
 │  ├─ ui/               # 银河大厅的搜索、信息卡、调试面板、顶栏
-│  └─ workspace/        # 学习书房：头部、文件树、阅读区（PDF/EPUB/占位）、研究栏、图标
-├─ data/                # 知识仓储、书库桥接（桌面 IPC / 浏览器演示）、原型迁移
-├─ types/               # 银河、知识、书房 UI、书库、阅读器、Electron API 类型
+│  └─ workspace/        # 学习书房：头部、文件树、阅读区（PDF/EPUB）、笔记编辑器、划线/笔记列表、研究栏、图标
+├─ data/                # 知识仓储、书库桥接（桌面 IPC / 浏览器演示）、注释桥接、原型迁移
+├─ types/               # 银河、知识、书房 UI、书库、阅读器、划线笔记、Electron API 类型
 └─ utils/               # 确定性随机数
 docs/screenshots/       # README 截图
 ```
 
 ## 已知限制
 
-- 书库与阅读器都是真实的：目录、书籍、阅读进度（页码/CFI/缩放）都落盘并可恢复。但**划线还没法在真实书页上创建**——阅读区的「添加划线 / 写笔记 / 关联节点」仍是禁用态，等 M4。
-- `highlights` / `notes` 里的数据目前来自原型迁移，还没有真实阅读产生的划线。
+- 书库、阅读器、划线、笔记都是真实的：目录、书籍、阅读进度（页码/CFI/缩放）、划线（页/CFI + 原文 + 矩形）、笔记与多对多关联都落盘并可恢复。
+- 划线只有一种颜色可选（金色）；`highlights.color` 字段已支持 gold/rose/sage，界面还没做颜色选择器。
+- 划线浮层只按「第一条矩形」定位高亮框（多行选区显示为一个连续色块），PDF 多行划线的逐行矩形已经存了 `rects`，画面上等后续细化。
 - PDF 每次只渲染当前一页（没有连续滚动），大文档靠翻页；EPUB 的主题、双栏、滚动模式未提供，`scroll_ratio` 字段先占位。
 - 右侧「网页搜索」不是内嵌浏览器；输入框禁用到 M6 接入 `WebContentsView` 为止。
 - 回收站只有数据层接口（`restoreBook`），还没有界面；书库位置固定为 `%APPDATA%\shiyun`，未做自定义目录设置。
 - 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
-- 中文正文字体当前来自 Google Fonts CDN，离线时回退到系统字体；M7 打包前自托管并收紧 CSP。
-- 知识布局仍是确定性的银河簇布局，不运行全局力导向模拟。
+- 界面字体只用系统字体栈（原 Google Fonts `@import` 会在离线时把 `document.fonts.ready` 拖住，已移除）；中文若无系统字体再考虑自托管。
+- 知识布局仍是确定性的银河簇布局，不运行全局力导向模拟；银河还没有读真实书库（M5 的 `GraphDataAdapter`）。
 
 ## 文档
 

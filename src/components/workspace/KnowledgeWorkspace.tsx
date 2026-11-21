@@ -8,18 +8,33 @@ import { DEFAULT_WORKSPACE_UI, type WorkspaceTab, type WorkspaceUiState } from '
 import type { KnowledgeGraphData } from '../../types/knowledge'
 import type { LibraryCounts, LibraryNodeKind, LibraryTree } from '../../types/library'
 import { getLibraryBridge, type LibraryBridge, type LibraryMode } from '../../data/libraryBridge'
+import { getAnnotationBridge } from '../../data/annotationBridge'
+import { readableNoteTitle, type Highlight } from '../../types/annotation'
+import type { ReaderFocus } from './ReaderPane'
 import { migratePrototypeOnce } from '../../data/prototypeMigration'
 import './Workspace.css'
 
 const STORAGE_KEY = 'shiyun-workspace-ui-v1'
-const NOTE_TAB: WorkspaceTab = { id: 'note-or-rr', title: 'OR 与 RR：罕见结局近似', kind: 'note', dirty: true }
 const EMPTY_COUNTS: LibraryCounts = { books: 0, folders: 0, highlights: 0, notes: 0, links: 0 }
+const HIGHLIGHTS_TAB: WorkspaceTab = { id: 'highlights', kind: 'highlights', title: '我的划线' }
+const NOTES_TAB: WorkspaceTab = { id: 'notes', kind: 'notes', title: '我的笔记' }
+const LEGACY_NOTE_TAB_ID = 'note-or-rr'
 
 function loadWorkspaceState(): WorkspaceUiState {
-  try {
-    return sanitizeWorkspaceUi(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'))
-  } catch {
-    return sanitizeWorkspaceUi(null)
+  const state = (() => {
+    try {
+      return sanitizeWorkspaceUi(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null'))
+    } catch {
+      return sanitizeWorkspaceUi(null)
+    }
+  })()
+  // M3 之前那个「草稿笔记」标签是纯演示数据，M4 起笔记标签的 id 就是笔记 ID：
+  // 旧 id 留在状态里会指向一篇不存在的笔记，直接丢掉。
+  const tabs = state.tabs.filter((tab) => !(tab.kind === 'note' && tab.id === LEGACY_NOTE_TAB_ID))
+  return {
+    ...state,
+    tabs,
+    activeTabId: tabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : tabs[0]?.id ?? null,
   }
 }
 
@@ -42,9 +57,11 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
   const [notice, setNotice] = useState<string | null>(null)
   // 桥接对象在挂载时确定一次：桌面版走 IPC，浏览器版走内存演示库。
   const bridge = useMemo(() => getLibraryBridge(), [])
+  const annotations = useMemo(() => getAnnotationBridge(), [])
   const mode: LibraryMode = bridge.mode
   const bridgeRef = useRef<LibraryBridge | null>(bridge)
   const resizeSide = useRef<'left' | 'right' | null>(null)
+  const [focusMap, setFocusMap] = useState<Record<string, ReaderFocus>>({})
 
   useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(state)), [state])
 
@@ -123,6 +140,79 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
     rightVisible: true,
   })
 
+  /** 书库里的书 ID → 可读标题，划线/笔记列表里用来标明「这条划线是哪本书的」。 */
+  const bookTitle = (bookId: string) => findBook(library, bookId)?.title ?? '未知书籍'
+
+  const refreshLibrary = async () => {
+    const current = bridgeRef.current
+    if (!current) return
+    try {
+      setLibrary(await current.listTree())
+    } catch {
+      // 刷新失败不影响正在看的页面，下一次操作会再试
+    }
+  }
+
+  /** 笔记标签页的 id 就是笔记 ID；标题取「显式标题 → 正文首行」。 */
+  const openNoteTab = async (noteId: string) => {
+    if (state.tabs.some((tab) => tab.id === noteId)) {
+      update({ activeTabId: noteId })
+      return
+    }
+    let title = '笔记'
+    try {
+      const note = await annotations.getNote(noteId)
+      if (note) title = readableNoteTitle(note.title, note.bodyText)
+    } catch {
+      // 读不到就用占位标题，NoteEditor 里会显示具体错误
+    }
+    openTab({ id: noteId, kind: 'note', title })
+  }
+
+  const createNoteTab = async () => {
+    try {
+      const note = await annotations.createNote({})
+      openTab({ id: note.id, kind: 'note', title: '未命名笔记' })
+      void refreshLibrary()
+    } catch (error) {
+      setNotice(`新建笔记失败：${describeError(error)}`)
+    }
+  }
+
+  /** 从一条划线新建笔记：笔记创建时就带上 highlightId，双向关系一次落库。 */
+  const createNoteForHighlight = async (highlightId: string) => {
+    try {
+      const note = await annotations.createNote({ highlightId })
+      openTab({ id: note.id, kind: 'note', title: '未命名笔记' })
+      void refreshLibrary()
+    } catch (error) {
+      setNotice(`新建笔记失败：${describeError(error)}`)
+    }
+  }
+
+  /** 从划线列表 / 笔记里的关联划线跳到原文：打开那本书的标签页，并把页码或 CFI 交给 ReaderPane。 */
+  const openSource = (highlight: Highlight) => {
+    const title = bookTitle(highlight.bookId)
+    const focus: ReaderFocus = {
+      token: Date.now(),
+      ...(highlight.locatorType === 'pdf_page' && highlight.page ? { page: highlight.page } : {}),
+      ...(highlight.cfi ? { cfi: highlight.cfi } : {}),
+    }
+    setFocusMap((current) => ({ ...current, [highlight.bookId]: focus }))
+    openTab({ id: highlight.bookId, kind: 'book', title })
+  }
+
+  const openLibraryList = (kind: 'highlights' | 'notes') => {
+    openTab(kind === 'highlights' ? HIGHLIGHTS_TAB : NOTES_TAB)
+    void refreshLibrary()
+  }
+
+  const retitleNote = (noteId: string, title: string) => {
+    update({
+      tabs: state.tabs.map((tab) => (tab.id === noteId && tab.kind === 'note' ? { ...tab, title } : tab)),
+    })
+  }
+
   /** 所有书库写操作都走这里：统一 busy 状态、统一错误提示，失败不留半截 UI。 */
   const mutate = async (label: string, action: (bridge: LibraryBridge) => Promise<LibraryTree>) => {
     const bridge = bridgeRef.current
@@ -198,6 +288,8 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
           onToggle={toggleFolder}
           onSelect={(selectedFolderId) => update({ selectedFolderId })}
           onOpenBook={(id, title) => openTab({ id, title, kind: 'book' })}
+          onOpenHighlights={() => openLibraryList('highlights')}
+          onOpenNotes={() => openLibraryList('notes')}
           onOpenNebula={onReturnGalaxy}
           onCreateFolder={(parentId, name) => void mutate('新建文件夹', (bridge) => bridge.createFolder(name, parentId))}
           onRename={(kind: LibraryNodeKind, id, name) => void mutate('重命名', (bridge) => bridge.renameNode(kind, id, name))}
@@ -224,13 +316,19 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
         <ReadingDesk
           tabs={state.tabs}
           activeTabId={state.activeTabId}
-          noteDraft={state.noteDraft}
           rightVisible={state.rightVisible}
           bridge={bridge}
+          annotations={annotations}
+          bookTitle={bookTitle}
+          focusFor={(bookId) => focusMap[bookId] ?? null}
           onActivate={(activeTabId) => update({ activeTabId })}
           onClose={closeTab}
-          onOpenNote={() => openTab(NOTE_TAB)}
-          onNoteDraft={(noteDraft) => update({ noteDraft })}
+          onNewNote={() => void createNoteTab()}
+          onNewNoteForHighlight={(highlightId) => void createNoteForHighlight(highlightId)}
+          onOpenNote={(noteId) => void openNoteTab(noteId)}
+          onOpenSource={openSource}
+          onFocusHighlight={openSource}
+          onTitleChange={retitleNote}
           onToggleRight={() => update({ rightVisible: !state.rightVisible })}
         />
 
@@ -256,4 +354,17 @@ export function KnowledgeWorkspace({ active, graph, onReturnGalaxy, onOpenNode }
       )}
     </section>
   )
+}
+
+/** 在书库树里按 ID 找书（文件夹递归 + 未分类）。 */
+function findBook(tree: LibraryTree | null, bookId: string) {
+  if (!tree) return null
+  const stack = [...tree.folders, ...tree.uncategorized]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (!node) break
+    if (node.kind === 'book' && node.id === bookId) return node
+    if (node.kind === 'folder') stack.push(...node.children)
+  }
+  return null
 }

@@ -12,8 +12,8 @@
 | M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架与状态持久化 | ✅ 完成（桌面窗口已实机验证） |
 | M2 | SQLite 书库 + 真实文件夹 + 导入 PDF/EPUB | ✅ 完成（桌面实机验证） |
 | M3 | PDF.js / EPUB.js 真实阅读器 | ✅ 完成（桌面实机验证） |
-| M4 | 划线、笔记、多对多关联 | ⏳ 下一步 |
-| M5 | 真实知识数据生成星图（GraphDataAdapter） | 未开始 |
+| M4 | 划线、笔记、多对多关联 | ✅ 完成（桌面实机验证） |
+| M5 | 真实知识数据生成星图（GraphDataAdapter） | ⏳ 下一步 |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 未开始 |
 | M7 | 打磨、Windows 打包与发布 | 未开始 |
 
@@ -83,21 +83,30 @@
 
 **M3 已知限制（如实记录）**
 
-- PDF 每次只渲染当前页（没有虚拟滚动的连续滚动），大文档靠翻页；文本层与划到 M4 一起做。
+- PDF 每次只渲染当前页（没有虚拟滚动的连续滚动），大文档靠翻页；文本层与划线已在 M4 完成（自己排坐标，因为 pdfjs 的 `TextLayer.render()` 在本项目里会挂住）。
 - 目录依赖 PDF 自身的 outline / EPUB 的 nav：样例 PDF 由 Edge 打印生成、没有书签，因此「目录」按钮是禁用态，这是真实状态而不是故障。
 - EPUB 的章节内相对资源（图片/字体）依赖 EPUB.js 写入的 `<base>`；为此 CSP 的 `base-uri` 从 `'none'` 放宽到 `'self' file: blob:`（iframe 已禁脚本）。
 - 主题、双栏排版、滚动模式（`flow: 'scrolled'`）尚未提供；阅读进度里的 `scroll_ratio` 字段先占位。
 
-## M4 · 划线、笔记与多对多（下一步）
+## M4 · 划线、笔记与多对多（完成）
 
-- [ ] PDF 文本层与 EPUB CFI 划线，写入 `highlights`（含 `quote / prefix / suffix`，页/CFI 必填）。
-- [ ] 选中文字浮动工具栏：划线 / 写笔记 / 关联节点。
-- [ ] TipTap 笔记编辑器，自动保存 `body` 与 `body_text`。
-- [ ] 一条划线关联多篇笔记；一篇笔记引用多条划线；双向查看。
-- [ ] 右侧抽屉或面板支持"这篇笔记关联了哪些划线"，可跳回原文。
-- [ ] 删除笔记/划线/关系的语义按 DATABASE_SCHEMA 第 4 节执行。
+- [x] PDF 文本层与 EPUB CFI 划线，写入 `highlights`（`quote / prefix / suffix` 必填，页/CFI 至少一个）——PDF 用自排 span + 归一化矩形，EPUB 用 CFI。
+- [x] 选中文字浮动工具栏：添加划线 / 写笔记（`selection-toolbar`）。
+- [x] TipTap 笔记编辑器（`@tiptap/react` 3 + `@tiptap/starter-kit` 3），正文去抖 600ms 自动保存 `body` 与 `body_text`，标题可留空由正文首行代替。
+- [x] 一条划线关联多篇笔记、一篇笔记引用多条划线，`highlight_notes` 复合主键，笔记页与划线卡片双向可查。
+- [x] 笔记页底部「关联的划线」可跳回原文（PDF 跳页 / EPUB 跳 CFI）与解除关联；划线卡片可「写笔记」「定位到这里」「删除划线」。
+- [x] 删除语义按 DATABASE_SCHEMA 第 4 节：删划线保笔记、删笔记软删且解除关联、删书不级联笔记。
+- [x] 单测：`src/types/annotation.test.ts`（16）、`electron/main/db/annotations.test.ts`（11）、`src/components/workspace/pdfTextLayer.test.ts`（9）。
+- [x] 实机复核（Electron 45.4.1 + CDP）：划线 8 条、重载后仍 8 条；一条划线挂 2–3 篇笔记；EPUB 关掉重开后 CFI 划线 5 条全部复原。
 
-## M5 · 真实知识进入银河
+### M4 已知限制
+
+- 划线颜色固定金色；`highlights.color` 支持 gold/rose/sage，但还没有颜色选择器。
+- 多行选区只画「第一条矩形」的高亮框（`rects` 已存全部矩形，画面后续细化）。
+- 空笔记的提示是自绘覆盖层（没装 `@tiptap/extension-placeholder`），语义上等价但不参与编辑器 undo 栈。
+- 浏览器演示模式（`dev:web`）用的是内存注释桥，刷新即丢；这是刻意的降级（ADR-011）。
+
+## M5 · 真实知识进入银河（下一步）
 
 - [ ] `GraphDataAdapter`：从 SQLite 读取实体生成 `KnowledgeGraphData`，替代 `mockKnowledge.ts` 的默认数据（保留演示数据作为可开关的示例库）。
 - [ ] 星图坐标持久化到 `graph_layouts`，用户拖动节点后固定。
@@ -123,8 +132,8 @@
 | 编号 | 场景 | 当前状态 |
 | --- | --- | --- |
 | A | 银河点「进入书房」→ 书房；书房点「返回银河」→ 银河，相机与选中状态不丢 | ✅ M1 已实现 |
-| B | 导入 PDF、划一条线、重启后划线仍在原位 | 🟡 导入与持久化已通（M2）、真实 PDF 渲染与阅读进度回写已通（M3），划线本身待 M4 |
-| C | 一条划线关联两篇笔记，两篇笔记都能看到对方 | ⛔ 需 M4 |
+| B | 导入 PDF、划一条线、重启后划线仍在原位 | ✅ M2 导入持久化 + M3 真实渲染 + M4 划线落库与重载复原（PDF 按页、EPUB 按 CFI） |
+| C | 一条划线关联两篇笔记，两篇笔记都能看到对方 | ✅ M4 已实现（`highlight_notes` 多对多，实测一条划线挂 3 篇笔记） |
 | D | 银河中某节点双击跳回该书的原文位置 | ⛔ 需 M5（书房→银河方向已通） |
 | E | 右侧研究栏开关时，中栏自动扩展、阅读排版不跳版 | ✅ M1 已实现（`.is-research-hidden` 网格重排） |
 

@@ -3,6 +3,9 @@ import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-d
 import type { PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, clampPage, clampZoom } from '../../types/reader'
+import type { Highlight, TextSelectionAnchor } from '../../types/annotation'
+import { buildContext, normalizeQuote, normalizeRects } from '../../types/annotation'
+import { horizontalScale, layoutTextSpans } from './pdfTextLayer'
 import { IconBook, IconList } from './icons'
 
 GlobalWorkerOptions.workerSrc = workerUrl
@@ -10,6 +13,8 @@ GlobalWorkerOptions.workerSrc = workerUrl
 // 中文 PDF 往往使用 CID 字体，必须提供 cmaps；内置标准字体也一样（由 npm run assets 复制到 public/）。
 const CMAP_URL = '/pdfjs/cmaps/'
 const STANDARD_FONT_URL = '/pdfjs/standard_fonts/'
+/** 单条划线最长存 2000 字，超长多半是整页误选 */
+const MAX_QUOTE = 2000
 
 export interface PdfOutlineEntry {
   title: string
@@ -21,12 +26,18 @@ interface Props {
   url: string
   initialPage: number | null
   initialZoom: number
+  /** 来自外部（划线列表「打开原文」）的跳页请求；token 变化即触发一次。 */
+  focus: { page: number; token: number } | null
+  highlights: Highlight[]
   /** 翻页 / 缩放后回报，调用方负责去抖持久化。 */
   onProgress: (page: number, zoom: number, total: number) => void
   onPageCount: (total: number) => void
+  onSelect: (selection: TextSelectionAnchor) => void
+  onHighlightClick: (highlight: Highlight) => void
 }
 
-export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCount }: Props) {
+export function PdfReader(props: Props) {
+  const { url, initialPage, initialZoom, focus, highlights, onProgress, onPageCount } = props
   const [loaded, setLoaded] = useState<{ url: string; doc: PDFDocumentProxy | null; error: string | null }>({
     url: '',
     doc: null,
@@ -37,6 +48,7 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
   const [zoom, setZoom] = useState(() => clampZoom(initialZoom))
   const [outline, setOutline] = useState<PdfOutlineEntry[]>([])
   const [tocOpen, setTocOpen] = useState(false)
+  const [pageBox, setPageBox] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
 
   // 载入状态从 state 派生：换书后旧文档立刻失效，不需要在 effect 里同步置空。
   const doc = loaded.url === url ? loaded.doc : null
@@ -45,8 +57,18 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
+  const textLayerRef = useRef<HTMLDivElement | null>(null)
   const [stageWidth, setStageWidth] = useState(0)
-  const renderTaskRef = useRef<{ cancel: () => void } | null>(null)
+  // 只留 cancel 与 promise 两个成员，避免把 pdfjs 的 RenderTask 类型泄漏到组件状态里
+  const renderTaskRef = useRef<{ cancel: () => void; promise: Promise<void> } | null>(null)
+  // 当前页的文本内容留着给划线截前后文用，避免每次选择都重新拉一遍
+  const pageTextRef = useRef('')
+
+  // 外部跳页请求（划线列表 / 笔记里的关联划线）与本地翻页共用一个页码：
+  // 用 token 比较大小得出该显示哪一页，纯派生，不在 effect 里改 state。
+  const [seenFocus, setSeenFocus] = useState(0)
+  const focusPage = focus && focus.token > seenFocus ? clampPage(focus.page, total || null) : null
+  const displayPage = focusPage ?? page
 
   // 打开文档
   useEffect(() => {
@@ -108,13 +130,18 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
     return () => observer.disconnect()
   }, [])
 
-  // 渲染当前页
+  // 渲染当前页：画布 + 可选中文本层（没有文本层就没法用真实选区划线）
   useEffect(() => {
     if (!doc) return
     let cancelled = false
     const run = async () => {
-      renderTaskRef.current?.cancel()
-      const proxy: PDFPageProxy = await doc.getPage(page)
+      // 同一张 canvas 不能同时跑两个 render 任务：先把上一轮彻底收尾，否则新任务会直接被拒
+      const previous = renderTaskRef.current
+      if (previous) {
+        previous.cancel()
+        await previous.promise.catch(() => undefined)
+      }
+      const proxy: PDFPageProxy = await doc.getPage(displayPage)
       if (cancelled) return
       const canvas = canvasRef.current
       if (!canvas) return
@@ -127,6 +154,7 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
       canvas.height = Math.floor(viewport.height * dpr)
       canvas.style.width = `${Math.floor(viewport.width)}px`
       canvas.style.height = `${Math.floor(viewport.height)}px`
+      setPageBox({ width: Math.floor(viewport.width), height: Math.floor(viewport.height) })
       const context = canvas.getContext('2d')
       if (!context) return
       const task = proxy.render({
@@ -136,34 +164,116 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
         transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
       })
       renderTaskRef.current = task
-      await task.promise.catch(() => undefined)
+      await task.promise.catch((reason: unknown) => {
+        if (!cancelled) console.error('[PdfReader] render failed', reason)
+      })
+      if (cancelled) return
+
+      const textContent = await proxy.getTextContent()
+      if (cancelled) return
+      const items = textContent.items.flatMap((item) => ('str' in item ? [item as { str: string; width: number; transform: number[] }] : []))
+      pageTextRef.current = items
+        .map((item) => item.str)
+        .join(' ')
+        .slice(0, 20000)
+
+      const container = textLayerRef.current
+      if (!container) return
+      container.replaceChildren()
+      container.style.width = `${Math.floor(viewport.width)}px`
+      container.style.height = `${Math.floor(viewport.height)}px`
+      // 自己排文本层（见 pdfTextLayer.ts）：pdfjs 的 TextLayer 在 Electron 里会挂住不返回
+      const layouts = layoutTextSpans(items, viewport.transform, viewport.scale)
+      const spans: HTMLSpanElement[] = []
+      for (const layout of layouts) {
+        const span = document.createElement('span')
+        span.textContent = layout.text
+        span.style.left = `${layout.left}px`
+        span.style.top = `${layout.top}px`
+        span.style.fontSize = `${layout.fontSize}px`
+        if (layout.angle) span.style.transform = `rotate(${layout.angle}rad)`
+        container.append(span)
+        spans.push(span)
+      }
+      // 第二遍量自然宽度，按 PDF 给的目标宽度做横向拉伸，让透明文字压在真字上
+      spans.forEach((span, index) => {
+        const layout = layouts[index]
+        const rotate = layout.angle ? `rotate(${layout.angle}rad) ` : ''
+        const scale = horizontalScale(span.getBoundingClientRect().width, layout.width)
+        if (rotate || scale !== 1) span.style.transform = `${rotate}scaleX(${scale})`
+      })
     }
     void run()
     return () => {
       cancelled = true
     }
-  }, [doc, page, zoom, stageWidth])
+  }, [doc, displayPage, zoom, stageWidth])
 
   // 进度回报
   useEffect(() => {
     if (!doc || total === 0) return
-    onProgress(page, zoom, total)
-  }, [doc, page, zoom, total, onProgress])
+    onProgress(displayPage, zoom, total)
+  }, [doc, displayPage, zoom, total, onProgress])
 
+  // 选区 → 划线入口。只在选中的文字落在文本层里时才认，避免把工具栏文字也划了。
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const handle = () => {
+      const selection = window.getSelection()
+      const text = normalizeQuote(selection?.toString() ?? '')
+      const container = textLayerRef.current
+      if (!selection || selection.rangeCount === 0 || !text || text.length < 2 || !container) {
+        return
+      }
+      const range = selection.getRangeAt(0)
+      if (!container.contains(range.commonAncestorContainer)) return
+      const box = container.getBoundingClientRect()
+      const rawRects = Array.from(range.getClientRects()).map((rect) => ({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      }))
+      const rects = normalizeRects(rawRects, { left: box.left, top: box.top, width: box.width, height: box.height })
+      const last = rawRects[rawRects.length - 1]
+      const context = buildContext(pageTextRef.current, text)
+      props.onSelect({
+        quote: text.slice(0, MAX_QUOTE),
+        prefix: context.prefix,
+        suffix: context.suffix,
+        rects: rects.length > 0 ? rects : null,
+        page: displayPage,
+        cfi: null,
+        anchor: last
+          ? { x: last.left + last.width / 2, y: last.top }
+          : { x: box.left + box.width / 2, y: box.top },
+      })
+    }
+    stage.addEventListener('mouseup', handle)
+    stage.addEventListener('touchend', handle)
+    return () => {
+      stage.removeEventListener('mouseup', handle)
+      stage.removeEventListener('touchend', handle)
+    }
+  }, [props, displayPage])
+
+  // 翻页即接管页码：把外部 focus 的 token 记账为「已处理」，之后由本地 page 主导。
   const goTo = useCallback(
     (next: number) => {
-      setPage((current) => {
-        const value = clampPage(next, total || null)
-        if (value === current) return current
-        return value
-      })
+      setSeenFocus(focus?.token ?? 0)
+      setPage(clampPage(next, total || null))
     },
-    [total],
+    [focus, total],
   )
 
   const changeZoom = useCallback((next: number) => {
     setZoom((current) => clampZoom(Number((current + next).toFixed(2))))
   }, [])
+
+  const pageHighlights = highlights.filter(
+    (highlight) => highlight.locatorType === 'pdf_page' && highlight.page === displayPage,
+  )
 
   return (
     <div className="book-reader">
@@ -178,10 +288,10 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
           <IconList size={14} />目录
         </button>
         <div className="book-reader__pages">
-          <button onClick={() => goTo(page - 1)} disabled={page <= 1} title="上一页">‹</button>
+          <button onClick={() => goTo(displayPage - 1)} disabled={displayPage <= 1} title="上一页">‹</button>
           <input
             aria-label="页码"
-            value={page}
+            value={displayPage}
             inputMode="numeric"
             onChange={(event) => {
               const parsed = Number.parseInt(event.target.value.replace(/[^\d]/g, ''), 10)
@@ -189,7 +299,7 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
             }}
           />
           <span>/ {total || '—'}</span>
-          <button onClick={() => goTo(page + 1)} disabled={total === 0 || page >= total} title="下一页">›</button>
+          <button onClick={() => goTo(displayPage + 1)} disabled={total === 0 || displayPage >= total} title="下一页">›</button>
         </div>
         <div className="book-reader__zoom">
           <button onClick={() => changeZoom(-ZOOM_STEP)} disabled={zoom <= ZOOM_MIN} title="缩小">−</button>
@@ -223,10 +333,37 @@ export function PdfReader({ url, initialPage, initialZoom, onProgress, onPageCou
         <div className="book-reader__stage" ref={stageRef}>
           {error ? (
             <p className="book-reader__error">{error}</p>
-          ) : busy ? (
-            <p className="book-reader__status">正在解析 PDF…</p>
           ) : (
-            <canvas ref={canvasRef} className="book-reader__canvas" />
+            <>
+              {busy && <p className="book-reader__status">正在解析 PDF…</p>}
+              <div
+                className="book-reader__page"
+                style={pageBox.width > 0 ? { width: pageBox.width, height: pageBox.height } : undefined}
+              >
+              <canvas ref={canvasRef} className="book-reader__canvas" />
+              <div className="book-reader__text-layer textLayer" ref={textLayerRef} />
+              <div className="book-reader__highlights" aria-hidden={false}>
+                {pageHighlights.map((highlight) =>
+                  (highlight.rects ?? []).map((rect, index) => (
+                    <button
+                      key={`${highlight.id}-${index}`}
+                      type="button"
+                      className={`book-reader__mark book-reader__mark--${highlight.color}`}
+                      style={{
+                        left: `${rect.left * 100}%`,
+                        top: `${rect.top * 100}%`,
+                        width: `${rect.width * 100}%`,
+                        height: `${rect.height * 100}%`,
+                      }}
+                      title={`${highlight.quote.slice(0, 40)}${highlight.noteCount > 0 ? `（${highlight.noteCount} 篇笔记）` : ''}`}
+                      aria-label={`划线：${highlight.quote.slice(0, 30)}`}
+                      onClick={() => props.onHighlightClick(highlight)}
+                    />
+                  )),
+                )}
+              </div>
+            </div>
+            </>
           )}
         </div>
       </div>

@@ -179,3 +179,22 @@ export function IconQuote(props: IconProps) {
     </Icon>
   )
 }
+
+export function IconRefresh(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M19.2 12a7.2 7.2 0 1 1-2.2-5.2" />
+      <path d="M19.4 4.6v4.2h-4.2" />
+    </Icon>
+  )
+}
+
+export function IconTrash(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.8 7.2h14.4" />
+      <path d="M9.6 7.2V5.4a1.2 1.2 0 0 1 1.2-1.2h2.4a1.2 1.2 0 0 1 1.2 1.2v1.8" />
+      <path d="M6.6 7.2 7.4 18a1.8 1.8 0 0 0 1.8 1.6h5.6a1.8 1.8 0 0 0 1.8-1.6l.8-10.8" />
+    </Icon>
+  )
+}

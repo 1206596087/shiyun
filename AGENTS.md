@@ -48,7 +48,7 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 4. 维护状态（最近发布、issue 活跃度）？
 5. 不装它的替代方案是什么？
 
-已预定的选型：`@tiptap/react`（M4）。已安装：`pdfjs-dist@5.7.284`（PDF）、`epubjs@0.3.93`（EPUB），见 ADR-013。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力。
+已安装：`pdfjs-dist@5.7.284`（PDF）、`epubjs@0.3.93`（EPUB）、`@tiptap/react` + `@tiptap/starter-kit@3.35.0`（笔记编辑器），见 ADR-013 / ADR-014 / ADR-015。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力（下一步如果需要划线颜色选择器，优先自己画，不引入 UI 库）。
 
 ## 5. 测试要求
 
@@ -103,4 +103,6 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 
 ## 8. 下一步建议
 
-M4 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：M3 的阅读器已经能显示真实书页并记录页码/CFI（`reading_states.page` 与 `reading_states.cfi`），所以划线要做的第一步是**在 PDF 画布上叠文本层、在 EPUB iframe 内取 CFI**，然后把 `highlights`（`locator_type` + `quote/prefix/suffix`）写进去。顺序建议：先有"能选字的文本层"，再能保存一条划线并在重新打开时按页/CFI 复原，最后才是 TipTap 笔记与多对多关系。禁止先做笔记界面——没有真实划线的笔记卡就是假功能。
+M5 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：书库已经是权威数据源（`books` / `highlights` / `notes` / `knowledge_links` / `graph_layouts` 都有真实数据），所以 M5 的第一步是写 `GraphDataAdapter`——从 SQLite 读实体生成 `KnowledgeGraphData`，让银河显示真实的书、划线、笔记与主题，而不是 `mockKnowledge.ts` 的演示图谱。顺序建议：先只读投影（渲染真实节点、保留现有银河视觉），再做「银河节点双击 → 进书房 → 定位到该书/该划线原文」（验收 D），最后做坐标持久化与 >5000 节点聚合。禁止改动银河的粒子/星核/Bloom 代码来「顺手优化」，也禁止把知识身份挂到粒子上（ADR-001）。
+
+M4 已经落地的东西不要重做：划线定位（页码 + 归一化矩形 / CFI）、自绘叠加层、TipTap 笔记、`highlight_notes` 多对多、删除语义，都在 `annotations.ts` / `ReaderPane.tsx` / `NoteEditor.tsx` / `AnnotationLists.tsx` 里，有 36 个单测护着。

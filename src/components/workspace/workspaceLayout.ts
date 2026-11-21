@@ -5,7 +5,7 @@ export const LEFT_MAX = 360
 export const RIGHT_MIN = 264
 export const RIGHT_MAX = 440
 
-const TAB_KINDS: WorkspaceTabKind[] = ['book', 'note']
+const TAB_KINDS: WorkspaceTabKind[] = ['book', 'note', 'highlights', 'notes']
 
 export function clampWidth(side: 'left' | 'right', value: number) {
   if (side === 'left') return clamp(value, LEFT_MIN, LEFT_MAX)

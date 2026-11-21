@@ -13,6 +13,8 @@ interface Props {
   onToggle: (id: string) => void
   onSelect: (id: string) => void
   onOpenBook: (id: string, title: string) => void
+  onOpenHighlights: () => void
+  onOpenNotes: () => void
   onOpenNebula: () => void
   onCreateFolder: (parentId: string | null, name: string) => void
   onRename: (kind: LibraryNodeKind, id: string, name: string) => void
@@ -175,12 +177,12 @@ export function FileSidebar(props: Props) {
       <div className="ws-divider" />
 
       <nav className="ws-library" aria-label="知识库入口">
-        <button className="ws-row ws-row--pending" disabled title="M4 里程碑：划线库">
+        <button className="ws-row" onClick={props.onOpenHighlights} title="书库里所有划线，可按书定位回原文">
           <IconHighlight size={15} />
           <span>我的划线</span>
           <b>{counts.highlights}</b>
         </button>
-        <button className="ws-row ws-row--pending" disabled title="M4 里程碑：笔记库">
+        <button className="ws-row" onClick={props.onOpenNotes} title="书库里所有笔记，双向查看它关联的划线">
           <IconNote size={15} />
           <span>我的笔记</span>
           <b>{counts.notes}</b>
