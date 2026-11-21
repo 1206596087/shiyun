@@ -39,27 +39,59 @@
 
 ## 3. 状态归属
 
-当前（M1）状态全部在渲染进程：
+M2 之后，**书库是数据的权威副本**，`localStorage` 只留纯 UI 偏好与旧原型数据：
 
 | 状态 | 位置 | 持久化 |
 | --- | --- | --- |
-| 知识图谱 `KnowledgeGraphData` | `App.tsx` → `useState` | `localStorage: shiyun-prototype-knowledge-v1`（`src/data/knowledgeRepository.ts`） |
+| 书库（文件夹 / 书籍 / 划线 / 笔记 / 关系 / 坐标） | 主进程 `libraryService` + `node:sqlite` | `%APPDATA%\shiyun\shiyun.db` |
+| 知识图谱投影 `KnowledgeGraphData` | `App.tsx` → `useState`（M5 改为从 SQLite 生成） | 暂时仍是 `localStorage: shiyun-prototype-knowledge-v1`（迁移后该键改名为 `.migrated` 保留） |
 | 银河视觉参数 `GalaxyConfig` | `App.tsx` | `localStorage: shiyun-view-config` |
 | 视图模式 / 选中 / 相机聚焦 | `App.tsx`（瞬时） | 不持久化 |
 | 书房 UI（栏宽、标签、展开目录、笔记草稿） | `KnowledgeWorkspace.tsx` | `localStorage: shiyun-workspace-ui-v1` |
 
-M2 起改为：知识图谱与书库状态由主进程 SQLite 持有，渲染进程通过 IPC 读写；`localStorage` 只保留纯 UI 偏好（栏宽、标签顺序等），并在首次启动时做一次性迁移。
+`App.tsx` 仍是"唯一数据源"的位置：书房通过 props 拿到 `graph`，通过 `onOpenNode(id)` 请求银河聚焦同一节点。书库则相反——书房自己通过 `LibraryBridge` 读写主进程，不经过 `App.tsx`，因为书籍树与星图是两种投影，不应该互相倒手。
 
-`App.tsx` 是"唯一数据源"的位置：书房通过 props 拿到 `graph`，通过 `onOpenNode(id)` 请求银河聚焦同一节点。这是验收项「银河节点跳回原文」的反向路径，正向路径（书房 → 银河）已通。
+## 3.1 书库数据流（M2）
+
+```text
+渲染进程                      preload（contextBridge）        主进程
+FileSidebar / KnowledgeWorkspace  window.shiyunDesktop.library  libraryIpc.ts
+        │                                   │                        │ 校验来源与参数
+        └── src/data/libraryBridge.ts ──────┴── ipcRenderer.invoke ──┴──> libraryService.ts
+                  （无 IPC 时降级为内存演示库）                              │
+                                                                    db/library.ts（SQL）
+                                                                    db/importBook.ts（文件复制）
+                                                                    db/prototypeImport.ts（一次性迁移）
+                                                                    db/backup.ts + db/migrate.ts
+                                                                            │
+                                                                     shiyun.db（WAL）
+```
+
+IPC 通道与职责：
+
+| 通道 | 参数 | 返回 |
+| --- | --- | --- |
+| `library:listTree` | — | `LibraryTree`（文件夹树 + 未分类 + 计数 + 数据目录） |
+| `library:createFolder` | `name, parentId` | 新 `LibraryTree` |
+| `library:renameNode` | `kind, id, name` | 新 `LibraryTree` |
+| `library:moveNode` | `kind, id, targetFolderId` | 新 `LibraryTree` |
+| `library:deleteFolder` | `id` | 新 `LibraryTree` |
+| `library:deleteBook` / `library:restoreBook` | `id` | 新 `LibraryTree` |
+| `library:importBook` | `folderId` | `ImportReport \| null`（用户在对话框里取消时返回 `null`） |
+| `library:importPrototype` | `graph` | `PrototypeImportResult` |
+| `library:getMeta` | — | 数据目录、库文件、备份数、最近备份、原型迁移时间 |
+
+所有写操作都返回**新的完整树**，渲染进程不做本地增量合并——书架规模小（个人书库），这样能保证界面与数据库不漂移。
 
 ## 4. 书房结构
 
 ```text
-KnowledgeWorkspace          # 三栏布局 + 拖拽 + 状态持久化（唯一有状态的容器）
+KnowledgeWorkspace          # 三栏布局 + 拖拽 + UI 状态持久化 + 书库加载/写操作
 ├─ WorkspaceHeader          # 品牌、全局搜索（读 graph）、布局设置、返回银河
-├─ FileSidebar              # 演示文件夹树、真实计数、入口按钮
-├─ ReadingDesk              # 标签栏 + 页面容器（book / note / empty）
-│   ├─ BookPage             # 章节、段落、高亮块、工具行、笔记卡（M3 换真实渲染）
+├─ FileSidebar              # 真实文件夹树（新建/重命名/拖拽/删除）+ 计数 + 入口
+├─ ReadingDesk              # 标签栏 + 页面容器（demo book / imported book / note / empty）
+│   ├─ BookPage             # 内置演示书的排版样例（M3 换成真实渲染）
+│   ├─ ImportedBookPage     # 真实书籍的「M3 接入」占位，不排假版面
 │   └─ NotePage             # 标题 + 只读正文（M4 换 TipTap）
 └─ ResearchSidebar          # 研究提示卡 + 外部浏览器打开（M6 换 WebContentsView）
 ```

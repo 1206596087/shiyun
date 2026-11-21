@@ -49,21 +49,29 @@
 - CSP 当前对 Google Fonts 开两个例外（`fonts.googleapis.com` / `fonts.gstatic.com`），离线时字体回退到系统字体；M7 打包前改自托管。
 - 书房的书籍内容、划线计数、笔记是演示数据；划线/笔记/关联按钮为禁用态，等 M3/M4。不得把它们描述成已实现。
 
-## M2 · SQLite 书库与文件夹（下一步）
+## M2 · SQLite 书库与文件夹（完成）
 
 目标：把演示数据换成真实、可迁移、可备份的本地书库。
 
-- [ ] 主进程接入 better-sqlite3，按 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) 建库与迁移（含 WAL、外键、备份）。
-- [ ] 迁移脚本 `001_init.sql`，`schema_migrations` 记账，启动时自动备份。
-- [ ] IPC：`library:listTree`、`library:createFolder`、`library:renameNode`、`library:moveBook`、`library:deleteFolder`、`library:importBook`。
-- [ ] 渲染进程 `src/data/libraryRepository.ts` 走 IPC，替换 `FileSidebar` 的 `DEMO_FOLDERS`。
-- [ ] 真实文件夹树：新建 / 重命名 / 拖动移动 / 删除到回收站 / 展开折叠；删除书籍不误删笔记。
-- [ ] 导入 PDF / EPUB：复制到 `books/<id>/source.*`、sha256 去重、解析页数或章节数、生成封面。
-- [ ] `localStorage` 原型数据一次性迁移（保留旧键，不删除）。
-- [ ] 测试：迁移幂等、外键级联、删除语义（删书保笔记）、导入去重。
-- [ ] 更新 README / DATABASE_SCHEMA 的"已实现"状态。
+- [x] 主进程接入数据库（改用 Node/Electron 内置 `node:sqlite`，见 [ADR-010](./DECISIONS.md)），按 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) 建库与迁移（WAL、外键、24 小时自动备份、保留 14 份）。
+- [x] 迁移 `electron/main/db/migrations/001_init.ts`，`schema_migrations` 记账；迁移前先备份，失败整版本回滚。
+- [x] IPC：`library:listTree` / `createFolder` / `renameNode` / `moveNode` / `deleteFolder` / `deleteBook` / `restoreBook` / `importBook` / `importPrototype` / `getMeta`，全部校验来源与参数类型。
+- [x] 渲染进程 `src/data/libraryBridge.ts` 走 IPC；浏览器模式自动降级为内存演示书库（`src/data/demoLibrary.ts`），不再有硬编码 `DEMO_FOLDERS`。
+- [x] 真实文件夹树：行内新建、右键重命名、拖拽移动（含"未分类"投放区、禁止移到自身子树、最多 3 层）、删除文件夹后书籍落到未分类、书籍软删进回收站、展开折叠。
+- [x] 导入 PDF / EPUB：`dialog` 多选 → sha256 去重 → 复制到 `books/<id>/source.<ext>` → 写库；页数与封面留到 M3 解析。
+- [x] `localStorage` 原型数据一次性迁移：书籍/笔记/划线/关系/坐标进库，旧键改名 `shiyun-prototype-knowledge-v1.migrated` 保留，`app_settings['migration.prototype.importedAt']` 记账。
+- [x] 测试：迁移幂等、层级上限、禁止移到子树、删文件夹→书落未分类、删书保笔记与划线、导入去重、原型迁移幂等（`electron/main/db/library.test.ts`，10 个用例）。
+- [x] 更新 README / DATABASE_SCHEMA 的"已实现"状态。
+- [x] 实机复核：`%APPDATA%\shiyun\shiyun.db` 生成、原型 5 本书/20 条划线/10 篇笔记/51 条关系入库、IPC 新建文件夹后刷新界面仍在（证据见 README）。
 
-## M3 · PDF / EPUB 阅读器
+**M2 已知限制（如实记录）**
+
+- 书籍正文仍未渲染：双击书库里的书只打开"M3 接入"占位页，不排假版面。
+- 浏览器模式（`npm run dev:web`）没有 IPC，只能用内存演示书库，刷新即回演示数据。
+- 导入还没做撤销/回收站界面；回收站数据在 `books.deleted_at`，只有 `restoreBook` 接口。
+- 书库目录仍是 `%APPDATA%\shiyun`（Electron 默认 userData），未做自定义位置设置。
+
+## M3 · PDF / EPUB 阅读器（下一步）
 
 - [ ] `pdfjs-dist` 渲染真实页面（虚拟滚动、缩放、翻页、目录、文本层）。
 - [ ] `epubjs` 渲染 EPUB（CFI 定位、目录、分页/滚动、主题）。
@@ -105,7 +113,7 @@
 | 编号 | 场景 | 当前状态 |
 | --- | --- | --- |
 | A | 银河点「进入书房」→ 书房；书房点「返回银河」→ 银河，相机与选中状态不丢 | ✅ M1 已实现 |
-| B | 导入 PDF、划一条线、重启后划线仍在原位 | ⛔ 需 M2 + M4 |
+| B | 导入 PDF、划一条线、重启后划线仍在原位 | 🟡 导入与持久化已通（M2），划线定位需 M3 阅读器 + M4，重启后仍在的数据是书籍/文件夹/原型划线 |
 | C | 一条划线关联两篇笔记，两篇笔记都能看到对方 | ⛔ 需 M4 |
 | D | 银河中某节点双击跳回该书的原文位置 | ⛔ 需 M5（书房→银河方向已通） |
 | E | 右侧研究栏开关时，中栏自动扩展、阅读排版不跳版 | ✅ M1 已实现（`.is-research-hidden` 网格重排） |

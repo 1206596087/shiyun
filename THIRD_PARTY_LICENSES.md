@@ -32,10 +32,11 @@
 
 | 项目 | 里程碑 | 用途 | 许可证 | 备注 |
 | --- | --- | --- | --- | --- |
-| better-sqlite3 | M2 | 主进程 SQLite 驱动 | MIT | 原生模块，需 `electron-rebuild`；见 DECISIONS ADR-002 |
 | pdfjs-dist | M3 | PDF 渲染与文本层 | Apache-2.0 | 需保留 `LICENSE`；不使用其内置 viewer 的打包资产 |
 | epubjs | M3 | EPUB 解析与 CFI 定位 | BSD-2-Clause | 需保留版权声明与许可条件 |
 | @tiptap/react | M4 | 笔记富文本编辑 | MIT | 依赖 `@tiptap/starter-kit` 等，全部 MIT |
+
+> SQLite 驱动最终**没有**引入 `better-sqlite3`：M2 改用 Node/Electron 内置的 `node:sqlite`（随 Electron 的 Node 运行时分发，不受本仓库依赖约束，也无需额外许可证文件）。见 [DECISIONS.md](./DECISIONS.md) ADR-010。
 
 引入时把实际版本号与许可证文本补进本表，并同步更新 [DECISIONS.md](./DECISIONS.md)。
 

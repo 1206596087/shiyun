@@ -48,7 +48,7 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
 4. 维护状态（最近发布、issue 活跃度）？
 5. 不装它的替代方案是什么？
 
-已预定的选型：`better-sqlite3`（M2）、`pdfjs-dist` + `epubjs`（M3）、`@tiptap/react`（M4）。除此之外的新依赖默认需要说服力。
+已预定的选型：`pdfjs-dist` + `epubjs`（M3）、`@tiptap/react`（M4）。SQLite 用内置 `node:sqlite`，不装 `better-sqlite3`（ADR-010）。除此之外的新依赖默认需要说服力。
 
 ## 5. 测试要求
 
@@ -84,7 +84,21 @@ npm run dev:web       # 浏览器验证（不需要 Electron 二进制）
     "http://localhost:5173/?space=workspace"
   ```
   注意 `--screenshot` 路径不要带空格（会被拆成多个参数并报 "Multiple targets are not supported in headless mode"）。
+- **桌面端数据目录**：`%APPDATA%\shiyun\`（`shiyun.db`、`shiyun.db-wal`、`books\`、`backups\`）。跑真机验证前先 `Get-Process electron | Stop-Process -Force`，同一 userData 起两个实例会 `bind() 失败` / `Unable to create cache (0x5)`。
+- **桌面端自动化验证**：`electron.exe . --remote-debugging-port=<port>`，再用 Node 24 内置 `fetch` + `WebSocket` 写个临时 CDP 客户端（`Runtime.evaluate`、`Page.reload`），不需要 puppeteer 之类的新依赖。
+
+## 7.1 两条血泪规则（务必遵守）
+
+1. **绝不用 `Get-Content | Set-Content`（或 `-replace ... | Set-Content`）改源码。** 中文会被按 GBK 误解码重写成 mojibake，文件变成非法 UTF-8，`tsc` 报 `TS1490 File appears to be binary`，`read`/`write` 工具也会因为非法编码拒绝该文件，只能从临时副本重建。改字一律用 `edit` / `write` 工具；脚本文件（`.cjs`）也一样。
+2. **不要用并发 Electron 实例验证同一个数据目录**，先杀进程再启动，否则 SQLite 与 Chromium cache 会互相打脸。
+
+## 7.2 数据库改动清单
+
+- 表结构改动 = 新增 `electron/main/db/migrations/00X_<name>.ts` 并追加到 `migrate.ts` 的 `migrations` 数组，**不得修改 `001_init.ts`**。
+- 迁移必须（1）在事务里执行，（2）失败即回滚，（3）迁移前备份。
+- 删除语义的硬约束写在 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) 第 4 节：删书不删笔记、删关系不删实体。改这条之前先改文档再改代码。
+- 仓储层改动必须加/改测试：`electron/main/db/library.test.ts` 已有迁移幂等、层级上限、删除语义、导入去重、原型迁移幂等 10 个用例。
 
 ## 8. 下一步建议
 
-M2 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：先建库与迁移（表结构已定稿在 [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)），再替换 `FileSidebar` 的演示数据，最后做导入。不要反过来先做界面——M1 已经把界面骨架立好了。
+M3 按 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) 执行：引入 `pdfjs-dist` 与 `epubjs`，先做「打开真实书籍 → 渲染第一页」，再补目录、翻页、缩放与阅读进度（`reading_states` 表已经在 M2 建好）；划线（M4）要等 M3 的文本层与定位就绪再动。别先做界面美化——书库与骨架都已立好，缺的是真正的书页。

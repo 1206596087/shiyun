@@ -1,6 +1,6 @@
 # 数据库设计（SQLite）
 
-> **状态：计划中，尚未实现。** M1 结束时数据仍在 `localStorage`（键 `shiyun-prototype-knowledge-v1`）。本文是 M2 的实现契约：先按此建表，再把渲染进程改为通过 IPC 读写。落地前请勿在代码或文档里声称"已接入数据库"。
+> **状态：已实现（M2）。** 迁移文件 `electron/main/db/migrations/001_init.ts` 与本文第 3 节逐字一致；连接层用 Node/Electron 内置 `node:sqlite`（`electron/main/db/connection.ts`），迁移与备份分别见 `migrate.ts` / `backup.ts`，书库读写见 `library.ts`，导入见 `importBook.ts`，`localStorage` 原型迁移见 `prototypeImport.ts`。已应用迁移禁止修改，结构调整必须新增版本。真实阅读产生的划线定位要等 M3/M4，在那之前 `highlights` 里的数据来自原型迁移。
 
 ## 1. 存储位置与文件
 
@@ -172,16 +172,17 @@ CREATE TABLE app_settings (
 - 迁移脚本放 `electron/main/db/migrations/00X_<name>.ts`，导出 `{ version, name, up(db) }`。
 - 不允许在迁移里读取用户文件内容（解析 PDF 属于 M3 的独立任务），只许改结构。
 
-## 6. 从 localStorage 一次性迁移
+## 6. 从 localStorage 一次性迁移（已实现：`electron/main/db/prototypeImport.ts` + `src/data/prototypeMigration.ts`）
 
 M2 首次启动时：
 
 1. 若 `shiyun.db` 不存在 → 建库、跑全量迁移。
-2. 若旧键 `shiyun-prototype-knowledge-v1` 存在 → 读取并校验，按 `type` 写入 `books / highlights / notes / knowledge_links / graph_layouts`；文件名、页码等缺失字段用演示值补齐并在 `app_settings['migration.notes']` 记录降级情况。
+2. 若旧键 `shiyun-prototype-knowledge-v1` 存在 → 读取并校验，按 `type` 写入 `books / highlights / notes / knowledge_links / graph_layouts`；文件名、页码等缺失字段用演示值补齐并在 `app_settings['migration.notes']` 记录降级情况（找不到所属书的划线会归入 `book-prototype-orphans`「原型划线（原书未知）」，不丢数据）。
 3. 迁移成功后把旧键改名为 `shiyun-prototype-knowledge-v1.migrated` **保留不删**，供用户回退；再写入 `app_settings['migration.prototype.importedAt']`。
+4. 已迁移过则整个函数直接返回 `alreadyImported: true`，不重复写库（幂等，有单测覆盖）。
 
 ## 7. 备份与恢复
 
-- 自动：每次启动若距上次备份超过 24 小时，复制一份库文件到 `backups/`；最多保留 14 份，超出按时间删除最旧的。
-- 手动：设置页「立即备份 / 打开备份目录 / 从备份恢复」。恢复前先关闭数据库连接并把当前库另存为 `pre-restore-<time>.db`。
+- 自动（已实现 `electron/main/db/backup.ts`）：每次启动若距上次备份超过 24 小时，复制一份库文件到 `backups/`；最多保留 14 份，超出按时间删除最旧的。迁移前也会先备份。
+- 手动（计划中，M7）：设置页「立即备份 / 打开备份目录 / 从备份恢复」。恢复前先关闭数据库连接并把当前库另存为 `pre-restore-<time>.db`。
 - 备份只复制 `shiyun.db`（WAL 模式先执行 `PRAGMA wal_checkpoint(TRUNCATE)`），不复制 `books/` 源文件；导出为可迁移包（M7）时再打 zip。

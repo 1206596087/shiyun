@@ -4,7 +4,29 @@
 
 ---
 
-## ADR-009 · 沙箱 preload 构建为 CommonJS，生产加载注入 CSP
+## ADR-011 · 书库能力在浏览器模式下降级为内存演示库
+
+**背景**：M2 的书库全在主进程（`node:sqlite` + `fs`）。但日常界面迭代用 `npm run dev:web`（不需要 Electron 二进制，也方便无头截图核对），那里没有 `window.shiyunDesktop`。
+
+**决策**：`src/data/libraryBridge.ts` 暴露统一的 `LibraryBridge` 接口：有 `window.shiyunDesktop.library` 时走 IPC，否则返回内存实现（`src/data/demoLibrary.ts`），新建/重命名/移动/删除在内存里真实生效、刷新即失效，`importBook` 返回 `null` 并禁用导入入口；左栏页脚明确写「演示书库 · 不会写入真实数据」。
+
+**理由**：让 UI 在没有主进程时也能跑真实交互路径（而不是塞一堆 `if (desktop)` 分支），同时不让人误以为浏览器里存的会持久化。
+
+**代价**：桥接层要维护两份实现，行为可能有细微差异（例如演示库不校验 3 层上限）。**重新评估**：M5 前后如果浏览器模式不再用于验收，可改为直接抛错。
+
+---
+
+## ADR-010 · 用内置 `node:sqlite` 替代 better-sqlite3
+
+**背景**：M2 需要在主进程持久化书库。原计划（ADR-002）用 `better-sqlite3`，它是原生模块：要 node-gyp 编译、要针对 Electron 的 ABI 重编译、M7 打包还要处理 `.node` 产物与签名。
+
+**决策**：改用 Node 24 内置的 `node:sqlite`（`DatabaseSync` / `prepare` / `run` / `all` / `get` / `exec`）。实测 Electron 45.4.1 的 Node 为 24.22.3、系统 Node 为 24.19.0，两端都能直接 `require('node:sqlite')` 并跑建表、插入、查询；Vitest 也能用同一套代码跑真实数据库测试（`electron/main/db/library.test.ts` 用 `:memory:` 与临时目录）。
+
+**理由**：零依赖、零编译、零 ABI 风险，`npm install` 不再需要构建工具链；API 与 better-sqlite3 高度相似（同步语句对象），迁移成本低到几乎透明——`connection.ts` 只包了 4 个函数（`queryAll/queryOne/execute/transaction`），事务用显式 `BEGIN/COMMIT/ROLLBACK` 手工实现。
+
+**代价**：`node:sqlite` 仍标注为实验性 API（Node 24 下无需 flag，但升级 Node 时要注意签名变化）；没有 better-sqlite3 的 `pragma()` 便捷方法与自定义函数注册能力（本项目用不到）。**重新评估**：升级到 Electron 50+ 时复核 API 稳定性；若需要全文检索（FTS5）再检查编译选项是否可用。
+
+
 
 **背景**：M1 提交后在本机装好 Electron 45.4.1 实机验证，发现 `sandbox: true` 下 preload 被打成 ESM（`out/preload/index.mjs`），Electron 报 `SyntaxError: Cannot use import statement outside a module`，`window.shiyunDesktop` 为 `undefined`——即「外部浏览器打开」在真实桌面里是坏的，而浏览器模式下完全看不出来。同时控制台报 `Insecure Content-Security-Policy` 警告。
 

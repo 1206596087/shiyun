@@ -11,14 +11,18 @@
 
 ![学习书房](docs/screenshots/study-workspace.png)
 
+![桌面版真实书库](docs/screenshots/desktop-library.png)
+
+> 第三张是 Electron 45 里的真实书库：目录来自 `%APPDATA%\shiyun\shiyun.db`，双击《数学之美》打开的正文仍是「M3 接入」占位页——不排假版面。
+
 ## 当前进度
 
 | 里程碑 | 内容 | 状态 |
 | --- | --- | --- |
 | M0 | 接管现有原型、基线验证、标签 `galaxy-baseline` | 完成 |
 | M1 | Electron 外壳 + 银河/书房双空间导航 + 书房三栏骨架 | 完成（桌面窗口已实机验证） |
-| M2 | SQLite 书库、真实文件夹树、导入 PDF/EPUB | 下一步 |
-| M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放） | 未开始 |
+| M2 | SQLite 书库、真实文件夹树、导入 PDF/EPUB | 完成（桌面实机验证） |
+| M3 | PDF.js / EPUB.js 阅读器（目录、翻页、缩放） | 下一步 |
 | M4 | 划线、笔记、多对多关联 | 未开始 |
 | M5 | 真实知识库生成星图（GraphDataAdapter） | 未开始 |
 | M6 | 右侧真实内嵌浏览器（WebContentsView） | 未开始 |
@@ -79,11 +83,20 @@ npm run build:web   # 纯网页构建
 
 - 与银河公用同一份 `KnowledgeGraphData`：左栏「我的划线 / 我的笔记 / 星云网络」计数、顶部全局搜索都读取真实图谱。
 - 顶部导航：诗云标识、个人知识宇宙、全局搜索（回车或输入即搜，命中后跳回银河并聚焦该节点）、布局设置（重置栏宽、显示/隐藏研究栏）、「返回银河」。
-- 左栏文件树：三层演示目录、展开/折叠、选中态、书籍行可打开标签页；「新建文件夹」与「我的划线 / 我的笔记」入口已就位但显式标注 M2 / M4。
+- 左栏文件树：目录来自真实书库（见下节），支持展开/折叠、选中态、双击打开标签页。
 - 中栏多标签阅读：可关闭标签、空状态、书页视图（章节、段落、米黄高亮块、添加划线 / 写笔记 / 关联节点工具行、笔记卡）、笔记页视图（M4 才可编辑，格式栏禁用并标注）。
 - 右栏网页研究栏：真实可用的「外部浏览器打开」（Electron 下走 `window.shiyunDesktop.openExternal`，浏览器下走 `window.open`，只允许 http/https）；地址输入框在 M6 前禁用并注明原因。
 - 三栏可拖拽（左 196–360px、右 264–440px）、右栏可隐藏，隐藏时中栏自动占满；全部 UI 状态持久化到 `localStorage` 键 `shiyun-workspace-ui-v1`。
 - 深浅两个空间通过 `opacity / transform / visibility` 过渡共存，切到书房时银河暂停渲染。
+
+### 本地书库（M2）
+
+- 主进程用 Node/Electron 内置 `node:sqlite`（Electron 45 的 Node 24 自带，无需原生模块编译，见 [ADR-010](./DECISIONS.md)）打开 `%APPDATA%\shiyun\shiyun.db`：WAL、`foreign_keys=ON`、每版本一个事务的迁移、迁移前备份、24 小时自动备份保留 14 份。
+- IPC 全部经 `library:*` 通道，主进程校验来源（`file://` 或 dev server）与参数类型；渲染进程只通过 `window.shiyunDesktop.library.*` 访问。
+- 左栏是真文件夹树：行内新建、右键重命名 / 移到未分类 / 删除、拖拽移动（含「未分类」投放区）、最多 3 层、禁止移到自身子树；删除文件夹时书籍落到「未分类」，删除书籍是软删（`deleted_at`），**笔记与划线从不级联删除**。
+- 导入 PDF / EPUB：`dialog` 多选 → sha256 去重 → 复制到 `books/<bookId>/source.<ext>` → 写库；页数与封面留到 M3 真正解析文件。
+- 首次启动把 `localStorage` 里的原型图谱一次性搬进 SQLite：书籍 → `books`、笔记 → `notes`、划线 → `highlights`（页码缺失时归入「原型划线（原书未知）」并记账）、关系 → `knowledge_links`、坐标 → `graph_layouts`；旧键改名为 `shiyun-prototype-knowledge-v1.migrated` 保留，不覆盖用户数据。
+- 浏览器模式（`npm run dev:web`）没有 IPC，自动降级为内存演示书库，页脚会写明「演示书库 · 不会写入真实数据」。
 
 ### Electron 外壳（M1）
 
@@ -98,6 +111,9 @@ npm run build:web   # 纯网页构建
 ```text
 electron/
 ├─ main/index.ts        # 窗口、IPC、导航与安全策略
+├─ main/libraryService.ts # 书库生命周期（打开/迁移/备份）与业务操作
+├─ main/libraryIpc.ts   # library:* 通道注册与参数校验
+├─ main/db/             # 连接、迁移、备份、路径、书库读写、导入、原型迁移
 └─ preload/index.ts     # contextBridge 暴露的最小桌面 API
 src/
 ├─ components/
@@ -105,17 +121,18 @@ src/
 │  ├─ knowledge/        # 知识层：节点与关系渲染
 │  ├─ ui/               # 银河大厅的搜索、信息卡、调试面板、顶栏
 │  └─ workspace/        # 学习书房：头部、文件树、阅读区、研究栏、图标
-├─ data/                # 演示知识库与存储适配器（M2 换成 SQLite）
-├─ types/               # 银河、知识、书房 UI、Electron API 类型
+├─ data/                # 知识仓储、书库桥接（桌面 IPC / 浏览器演示）、原型迁移
+├─ types/               # 银河、知识、书房 UI、书库、Electron API 类型
 └─ utils/               # 确定性随机数
 docs/screenshots/       # README 截图
 ```
 
 ## 已知限制
 
-- 书籍、划线、笔记内容仍是演示数据，保存在 `localStorage`；没有真实文件导入、没有 SQLite、没有迁移与备份（M2 解决）。
-- 阅读区是排版演示，不是真实 PDF/EPUB 渲染（M3）。划线、笔记编辑、关联操作按钮处于禁用状态（M4）。
+- 书库已是真实 SQLite：目录、书籍、划线、笔记、关系、坐标都会落盘，重启后仍在。但**书籍正文还没渲染**——双击书库里的书只打开「M3 接入」占位页（M3）。
+- 划线创建、笔记编辑、关联操作按钮仍是禁用状态（M4）；`highlights` / `notes` 里的数据目前来自原型迁移，还没有真实阅读产生的划线。
 - 右侧「网页搜索」不是内嵌浏览器；输入框禁用到 M6 接入 `WebContentsView` 为止。
+- 导入的书只做了哈希去重与文件复制，页数 / 章节数 / 封面要等 M3 解析；回收站只有数据层接口，还没有界面。
 - 桌面窗口已实机验证，但只验证了 `out/` 的构建产物；Windows 安装包与自动更新未做（M7）。
 - 中文正文字体当前来自 Google Fonts CDN，离线时回退到系统字体；M7 打包前自托管并收紧 CSP。
 - 知识布局仍是确定性的银河簇布局，不运行全局力导向模拟。
@@ -125,7 +142,7 @@ docs/screenshots/       # README 截图
 | 文档 | 内容 |
 | --- | --- |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | 进程、分层、数据流、组件职责 |
-| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | SQLite 表结构、ID 策略、迁移与备份（M2 落地） |
+| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | SQLite 表结构、ID 策略、迁移与备份（M2 已实现 `001_init`） |
 | [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md) | M0–M7 目标、验收与当前进度 |
 | [DECISIONS.md](./DECISIONS.md) | 技术选型与取舍记录 |
 | [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md) | 依赖许可证与参考项目 |

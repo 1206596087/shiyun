@@ -62,13 +62,40 @@ export function ReadingDesk(props: Props) {
           {!activeTab ? (
             <EmptyDesk onOpenNote={props.onOpenNote} />
           ) : activeTab.kind === 'book' ? (
-            <BookPage onOpenNote={props.onOpenNote} />
+            activeTab.id === DEMO_BOOK_TAB_ID ? (
+              <BookPage onOpenNote={props.onOpenNote} />
+            ) : (
+              <ImportedBookPage title={activeTab.title} />
+            )
           ) : (
             <NotePage title={activeTab.title} value={props.noteDraft} onChange={props.onNoteDraft} />
           )}
         </div>
       </div>
     </section>
+  )
+}
+
+/** 演示阅读页只属于内置的这本演示书；书库里的真实书籍走 ImportedBookPage。 */
+const DEMO_BOOK_TAB_ID = 'book-biostatistics'
+
+function ImportedBookPage({ title }: { title: string }) {
+  return (
+    <article className="reader-page">
+      <p className="reader-page__chapter">已从书库打开</p>
+      <p className="reader-paragraph">
+        《{title}》已经进入 SQLite 书库，文件也复制到了书籍目录。正文渲染要等 M3 接入 PDF.js / EPUB.js，
+        在那之前这里不会用假排版冒充真实书页。
+      </p>
+      <div className="reader-actions" aria-label="选中文字工具栏">
+        <button disabled title="M4 里程碑：真实选区锚点与高亮持久化"><IconHighlight size={14} />添加划线</button>
+        <span aria-hidden="true">/</span>
+        <button disabled title="M4 里程碑：从真实选区建笔记"><IconNote size={14} />写笔记</button>
+        <span aria-hidden="true">/</span>
+        <button disabled title="M4 里程碑：知识关系"><IconNetwork size={14} />关联节点</button>
+      </div>
+      <p className="reader-page__foot">真实阅读视图 · M3 接入 PDF.js 与 EPUB.js 后在此显示书页、目录与页码</p>
+    </article>
   )
 }
 

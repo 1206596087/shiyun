@@ -1,5 +1,7 @@
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
+import { registerLibraryIpc } from './libraryIpc.ts'
+import { closeLibrary, initLibrary } from './libraryService.ts'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -35,6 +37,8 @@ function assertTrustedSender(url: string) {
 }
 
 function registerIpc() {
+  registerLibraryIpc(assertTrustedSender)
+
   ipcMain.handle('app:get-runtime-info', (event) => {
     assertTrustedSender(event.senderFrame?.url ?? '')
     return { platform: process.platform, version: app.getVersion(), electron: process.versions.electron }
@@ -84,12 +88,26 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // 书库打不开就不要开窗口：半迁移的库上继续写，比拒绝启动危险得多。
+  try {
+    initLibrary()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    dialog.showErrorBox('书库无法打开', `${message}\n\n可以从 %APPDATA%\\shiyun\\backups 手动恢复一份备份后再启动。`)
+    app.exit(1)
+    return
+  }
+
   registerIpc()
   installContentSecurityPolicy()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('will-quit', () => {
+  closeLibrary()
 })
 
 app.on('window-all-closed', () => {
